@@ -26,7 +26,7 @@ setup(
     python_requires=">=3.7",
     entry_points={
         "console_scripts": [
-            "fck = fck.fck:main",
+            "fck = fck-python.fck:main",
         ],
     },
     license="MIT",  # Explicitly set the license instead of `license-file`
