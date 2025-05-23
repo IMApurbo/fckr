@@ -51,7 +51,7 @@
 Install directly from PyPI:
 
 ```bash
-pip install fck
+pip install fck-python
 ````
 
 ### Requirements
