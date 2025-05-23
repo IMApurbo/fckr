@@ -29,15 +29,15 @@ def display_animated_logo():
     """Display ASCII logo and text with a typewriter-like typing effect and gradient colors."""
     logo = """
   █████▒▄████▄   ██ ▄█▀
-▓██   ▒▒██▀ ▀█   ██▄█▒             		 ╦╔╦╗╔═╗┌─┐┬ ┬┬─┐┌┐ ┌─┐
-▒████ ░▒▓█    ▄ ▓███▄░         AUTHOR: 	 ║║║║╠═╣├─┘│ │├┬┘├┴┐│ │
-░▓█▒  ░▒▓▓▄ ▄██▒▓██ █▄ 		             ╩╩ ╩╩ ╩┴  └─┘┴└─└─┘└─┘
+▓██   ▒▒██▀ ▀█   ██▄█▒ 			 ╦╔╦╗╔═╗┌─┐┬ ┬┬─┐┌┐ ┌─┐
+▒████ ░▒▓█    ▄ ▓███▄░ 	AUTHOR: 	 ║║║║╠═╣├─┘│ │├┬┘├┴┐│ │
+░▓█▒  ░▒▓▓▄ ▄██▒▓██ █▄ 			 ╩╩ ╩╩ ╩┴  └─┘┴└─└─┘└─┘
 ░▒█░   ▒ ▓███▀ ░▒██▒ █▄
  ▒ ░   ░ ░▒ ▒  ░▒ ▒▒ ▓▒
  ░       ░  ▒   ░ ░▒ ▒░
  ░ ░   ░        ░ ░░ ░ 
        ░ ░      ░  ░   
-       ░               
+       ░                
     """
     title = "The Ultimate Brute Forcer"
     developer = "Developed by: IMApurbo"
