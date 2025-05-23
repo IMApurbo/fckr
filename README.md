@@ -64,7 +64,7 @@ pip install fck
 ## ⚙️ Usage
 
 ```bash
-kck -u "<url_with_FCK>" -w <wordlist> [options]
+fck -u "<url_with_FCK>" -w <wordlist> [options]
 ```
 
 ### Common Flags
@@ -183,7 +183,7 @@ Word: bye   | Status: 200 | Length: 5142 | Time: 0.30s
 ## 🛠️ Development
 
 ```bash
-git clone https://github.com/imapurbo/fck.git
+git clone https://github.com/IMApurbo/fck.git
 cd fck
 pip install -r requirements.txt
 python -m fck -u "https://example.com/?q=FCK" -w list.txt
