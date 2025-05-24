@@ -9,7 +9,7 @@ setup(
     version="0.1",
     author="AKM Korishee Apurbo",
     author_email="bandinvisible8@gmail.com",
-    description="FCK – The Ultimate Brute Forcer",
+    description="FCKR – The Ultimate Brute Forcer",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/IMApurbo/fck",  
@@ -26,7 +26,7 @@ setup(
     python_requires=">=3.7",
     entry_points={
         "console_scripts": [
-            "fck = fck-python.fck:main",
+            "fckr = fckr.fckr:main",
         ],
     },
     license="MIT",  # Explicitly set the license instead of `license-file`
