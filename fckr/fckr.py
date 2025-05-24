@@ -4,7 +4,8 @@ import time
 from typing import List, Tuple, Optional, Dict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
-from urllib.parse import parse_qs, urlencode
+from urllib.parse import parse_qs
+import threading
 from rich.console import Console
 from rich.progress import Progress, BarColumn, TextColumn, TimeElapsedColumn
 from rich.text import Text
@@ -115,7 +116,8 @@ def make_request(url: str, method: str, data: Optional[Dict[str, str]], timeout:
             't': elapsed_time
         }
     except requests.RequestException as e:
-        console.print(f"[red]Error making request to {url}: {e}[/red]")
+        if debug:
+            console.print(f"[red]Error making request to {url}: {e}[/red]")
         return {
             's': None,
             'l': 0,
@@ -181,45 +183,11 @@ Options:
   -w, --wordlist <file> Path to wordlist file (required)
   -m, --method <GET|POST> HTTP method (default: GET)
   -t, --timeout <seconds> Request timeout in seconds (default: 5.0)
-  -F, --filter <filter> Filter responses before processing. Only responses matching ALL -F filters proceed.
-                        Format: <s|l|c>:<e|c|nc>:<value>
-                        Fields: s (status code), l (content length), c (response body)
-                        Types: e (exact match), c (contains, case-insensitive), nc (not contains, case-insensitive)
-                        Examples: s:e:200, c:c:success, c:nc:something, l:e:1000
-  -o, --output-filter <filter> Filter which responses are displayed. Responses must match AT LEAST ONE -o filter to be shown.
-                               Unlike -F filters, which must ALL match for a response to be processed further, -o filters
-                               control which processed responses are displayed in the output. If no -o filters are provided,
-                               all responses that pass -F filters are displayed. Use -o filters to narrow down the output
-                               to specific results of interest, such as successful responses, responses with specific content,
-                               or responses meeting certain criteria. Multiple -o filters can be specified, and a response
-                               is displayed if it matches any one of them. This is useful for focusing on relevant results
-                               without modifying the processing logic defined by -F filters.
-                               Format: <s|l|c>:<e|c|nc>:<value>
-                               Fields:
-                                 - s: Status code (e.g., 200, 404)
-                                 - l: Content length (e.g., 1234)
-                                 - c: Response body content (e.g., success, <title>Login</title>)
-                               Types:
-                                 - e: Exact match (e.g., status code or length must match exactly)
-                                 - c: Contains match (case-insensitive, HTML attributes normalized)
-                                 - nc: Not contains match (case-insensitive, HTML attributes normalized)
-                               Examples:
-                                 - s:e:200 (display responses with status code exactly 200)
-                                 - c:c:success (display responses containing 'success' in the body)
-                                 - c:nc:error (display responses not containing 'error' in the body)
-                                 - l:e:1000 (display responses with content length exactly 1000)
-                                 - c:c:'<h2 class=lead>results</h2>' (display responses with specific HTML)
-                                 - s:c:20 (display responses with status codes starting with '20', e.g., 200, 201)
-                                 - l:c:100 (display responses with content length containing '100', e.g., 100, 1000)
+  -F, --filter <filter> Filter responses before processing. Format: <s|l|c>:<e|c|nc>:<value>
+  -o, --output-filter <filter> Filter which responses are displayed. Format: <s|l|c>:<e|c|nc>:<value>
   -r, --fetch-response <word> Fetch full HTML response for a specific word
   -d, --debug          Enable debug mode to log requests and filter mismatches
   -T, --threads <number> Number of concurrent threads (default: 10)
-
-Notes:
-  - Use -u to specify the target URL.
-  - Use -b to specify the POST body for POST requests.
-  - Either -u alone (for GET) or -u with -b (for POST) must be provided.
-  - URL must contain 'FCK' for GET requests; body must contain 'FCK' for POST requests.
     """
     console.print(help_text)
     sys.exit(0)
@@ -295,7 +263,6 @@ def parse_arguments() -> dict:
             sys.exit(1)
         i += 1
     
-    # Validate required arguments
     if not args['url']:
         console.print("[red]Error: -u/--url is required.[/red]")
         sys.exit(1)
@@ -308,8 +275,6 @@ def parse_arguments() -> dict:
     if args['method'].upper() == 'GET' and args['body']:
         console.print("[red]Error: -b/--body is not allowed for GET requests.[/red]")
         sys.exit(1)
-    
-    # Check for FCK in URL (GET) or body (POST)
     if args['method'].upper() == 'GET' and 'FCK' not in args['url']:
         console.print("[red]Error: URL must contain 'FCK' placeholder for GET requests.[/red]")
         sys.exit(1)
@@ -319,7 +284,7 @@ def parse_arguments() -> dict:
     
     return args
 
-def process_word(word: str, args: dict, filters: List[dict], output_filters: List[dict], progress, task) -> Tuple[str, Optional[dict]]:
+def process_word(word: str, args: dict, filters: List[dict], output_filters: List[dict]) -> Tuple[str, Optional[dict]]:
     """Process a single word: make request, apply filters, and return result."""
     url, data = prepare_request(args['url'], args['body'], word, args['method'])
     response = make_request(url, args['method'], data, args['timeout'], args['debug'])
@@ -332,7 +297,6 @@ def process_word(word: str, args: dict, filters: List[dict], output_filters: Lis
     if should_skip:
         if args['debug']:
             console.print(f"[yellow]Debug: Word '{word}' skipped by filter {f}[/yellow]")
-        progress.advance(task)
         return word, None
 
     should_display = not output_filters
@@ -345,7 +309,6 @@ def process_word(word: str, args: dict, filters: List[dict], output_filters: Lis
     elif args['debug']:
         console.print(f"[yellow]Debug: Word '{word}' did not match output filter {output_filters}[/yellow]")
     
-    progress.advance(task)
     return word, None
 
 def main():
@@ -387,6 +350,8 @@ def main():
         return
 
     matches_found = False
+    completed_tasks = 0
+    lock = threading.Lock()
     progress = Progress(
         TextColumn("[cyan]Running..."),
         BarColumn(
@@ -405,15 +370,18 @@ def main():
             task = progress.add_task("Working...", total=len(words))
             with ThreadPoolExecutor(max_workers=args['threads']) as executor:
                 future_to_word = {
-                    executor.submit(process_word, word, args, filters, output_filters, progress, task): word
+                    executor.submit(process_word, word, args, filters, output_filters): word
                     for word in words
                 }
                 for future in as_completed(future_to_word):
                     word, response = future.result()
-                    if response:
-                        matches_found = True
-                        error = f" [red]Error: {response['error']}[/red]" if response.get('error') else ""
-                        console.print(f"[bold]Word:[/bold] {word} | [bold]Status:[/bold] {response['s']} | [bold]Length:[/bold] {response['l']} | [bold]Time:[/bold] {response['t']:.2f}s{error}")
+                    with lock:
+                        completed_tasks += 1
+                        progress.update(task, completed=completed_tasks)
+                        if response:
+                            matches_found = True
+                            error = f" [red]Error: {response['error']}[/red]" if response.get('error') else ""
+                            console.print(f"[bold]Word:[/bold] {word} | [bold]Status:[/bold] {response['s']} | [bold]Length:[/bold] {response['l']} | [bold]Time:[/bold] {response['t']:.2f}s{error}")
                     time.sleep(0.01)  # Small delay to prevent server overload
         
         if matches_found:
