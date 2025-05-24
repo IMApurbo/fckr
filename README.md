@@ -1,6 +1,6 @@
-# FCK – The Ultimate Brute Forcer
+# FCKR – The Ultimate Brute Forcer
 
-**FCK** is a command-line tool designed for **security researchers** and **penetration testers** to brute-force HTTP requests with powerful and customizable filtering capabilities. It replaces the `FCK` placeholder in URLs or POST bodies with values from a wordlist, allowing you to test web endpoints and inspect/filter responses.
+**FCKR** is a command-line tool designed for **security researchers** and **penetration testers** to brute-force HTTP requests with powerful and customizable filtering capabilities. It replaces the `FCKR` placeholder in URLs or POST bodies with values from a wordlist, allowing you to test web endpoints and inspect/filter responses.
 
 > ✨ Developed by **[@IMApurbo](https://github.com/imapurbo)**  
 > 🛡️ Use responsibly. Authorized testing only.
@@ -10,7 +10,7 @@
 ## 🚀 Features
 
 - **Flexible Brute-Forcing**  
-  Replace `FCK` placeholders in URLs or POST bodies with wordlist entries.
+  Replace `FCKR` placeholders in URLs or POST bodies with wordlist entries.
 
 - **HTTP Method Support**  
   Supports both `GET` and `POST` methods.
@@ -51,7 +51,7 @@
 Install directly from PyPI:
 
 ```bash
-pip install fck-python
+pip install fckr
 ````
 
 ### Requirements
@@ -64,15 +64,15 @@ pip install fck-python
 ## ⚙️ Usage
 
 ```bash
-fck -u "<url_with_FCK>" -w <wordlist> [options]
+fckr -u "<url_with_FCKR>" -w <wordlist> [options]
 ```
 
 ### Common Flags
 
 | Short | Long               | Description                                      | Required | Default |
 | ----- | ------------------ | ------------------------------------------------ | -------- | ------- |
-| `-u`  | `--url`            | Target URL with `FCK` placeholder                | ✅        | -       |
-| `-b`  | `--body`           | POST body with `FCK` (use with POST only)        | 🟡       | -       |
+| `-u`  | `--url`            | Target URL with `FCKR` placeholder                | ✅        | -       |
+| `-b`  | `--body`           | POST body with `FCKR` (use with POST only)        | 🟡       | -       |
 | `-w`  | `--wordlist`       | Path to wordlist                                 | ✅        | -       |
 | `-m`  | `--method`         | HTTP method (`GET` or `POST`)                    | ❌        | GET     |
 | `-t`  | `--timeout`        | Timeout in seconds                               | ❌        | 5.0     |
@@ -119,13 +119,13 @@ Format:
 **Brute-force with GET:**
 
 ```bash
-fck -u "https://test.com/search?q=FCK" -w list.txt -m GET
+fckr -u "https://test.com/search?q=FCKR" -w list.txt -m GET
 ```
 
 **POST request with body:**
 
 ```bash
-fck -u "http://test.com/search" -b "query=FCK&submit=1" -w list.txt -m POST
+fckr -u "http://test.com/search" -b "query=FCKR&submit=1" -w list.txt -m POST
 ```
 
 **Filter by content:**
@@ -158,35 +158,16 @@ test
 search
 ```
 
----
-
-## 🧪 Example Output
-
-```text
-█████▒▄████▄   ██ ▄█▀
-▓██   ▒▒██▀ ▀█   ██▄█▒ 
-▒████ ░▒▓█    ▄ ▓███▄░ 
-░▓█▒  ░▒▓▓▄ ▄██▒▓██ █▄ 
-░▒█░   ▒ ▓███▀ ░▒██▒ █▄
-The Ultimate Brute Forcer by IMApurbo
-----------------------------------------------------
-Starting brute force with 88 words...
-Method: POST
-Target: http://testphp.vulnweb.com/search
-Word: hello | Status: 200 | Length: 5142 | Time: 0.25s
-Word: bye   | Status: 200 | Length: 5142 | Time: 0.30s
-🎉 Brute Force Complete!
-```
 
 ---
 
 ## 🛠️ Development
 
 ```bash
-git clone https://github.com/IMApurbo/fck.git
-cd fck
+git clone https://github.com/IMApurbo/fckr.git
+cd fckr
 pip install -r requirements.txt
-python -m fck -u "https://example.com/?q=FCK" -w list.txt
+python -m fckr -u "https://example.com/?q=FCKR" -w list.txt
 ```
 
 ---
