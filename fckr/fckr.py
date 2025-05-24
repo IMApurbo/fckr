@@ -167,6 +167,63 @@ def signal_handler(sig, frame):
     console.print("\n[red bold]Process stopped by user.[/red bold]")
     sys.exit(1)
 
+def print_help():
+    """Print help message and exit."""
+    help_text = """
+CLI Request Brute Forcer - A tool for brute-forcing HTTP requests with customizable filters.
+
+Usage: python brute_forcer.py [options]
+
+Options:
+  -h, --help            Show this help message and exit
+  -u, --url <url>      Target URL with FCK placeholder (e.g., https://example.com/?q=FCK) (required)
+  -b, --body <body>    POST body with FCK placeholder (e.g., searchFor=FCK&goButton=go)
+  -w, --wordlist <file> Path to wordlist file (required)
+  -m, --method <GET|POST> HTTP method (default: GET)
+  -t, --timeout <seconds> Request timeout in seconds (default: 5.0)
+  -F, --filter <filter> Filter responses before processing. Only responses matching ALL -F filters proceed.
+                        Format: <s|l|c>:<e|c|nc>:<value>
+                        Fields: s (status code), l (content length), c (response body)
+                        Types: e (exact match), c (contains, case-insensitive), nc (not contains, case-insensitive)
+                        Examples: s:e:200, c:c:success, c:nc:something, l:e:1000
+  -o, --output-filter <filter> Filter which responses are displayed. Responses must match AT LEAST ONE -o filter to be shown.
+                               Unlike -F filters, which must ALL match for a response to be processed further, -o filters
+                               control which processed responses are displayed in the output. If no -o filters are provided,
+                               all responses that pass -F filters are displayed. Use -o filters to narrow down the output
+                               to specific results of interest, such as successful responses, responses with specific content,
+                               or responses meeting certain criteria. Multiple -o filters can be specified, and a response
+                               is displayed if it matches any one of them. This is useful for focusing on relevant results
+                               without modifying the processing logic defined by -F filters.
+                               Format: <s|l|c>:<e|c|nc>:<value>
+                               Fields:
+                                 - s: Status code (e.g., 200, 404)
+                                 - l: Content length (e.g., 1234)
+                                 - c: Response body content (e.g., success, <title>Login</title>)
+                               Types:
+                                 - e: Exact match (e.g., status code or length must match exactly)
+                                 - c: Contains match (case-insensitive, HTML attributes normalized)
+                                 - nc: Not contains match (case-insensitive, HTML attributes normalized)
+                               Examples:
+                                 - s:e:200 (display responses with status code exactly 200)
+                                 - c:c:success (display responses containing 'success' in the body)
+                                 - c:nc:error (display responses not containing 'error' in the body)
+                                 - l:e:1000 (display responses with content length exactly 1000)
+                                 - c:c:'<h2 class=lead>results</h2>' (display responses with specific HTML)
+                                 - s:c:20 (display responses with status codes starting with '20', e.g., 200, 201)
+                                 - l:c:100 (display responses with content length containing '100', e.g., 100, 1000)
+  -r, --fetch-response <word> Fetch full HTML response for a specific word
+  -d, --debug          Enable debug mode to log requests and filter mismatches
+  -T, --threads <number> Number of concurrent threads (default: 10)
+
+Notes:
+  - Use -u to specify the target URL.
+  - Use -b to specify the POST body for POST requests.
+  - Either -u alone (for GET) or -u with -b (for POST) must be provided.
+  - URL must contain 'FCK' for GET requests; body must contain 'FCK' for POST requests.
+    """
+    console.print(help_text)
+    sys.exit(0)
+
 def parse_arguments() -> dict:
     """Parse command-line arguments manually."""
     args = {
@@ -185,7 +242,9 @@ def parse_arguments() -> dict:
     i = 1
     while i < len(sys.argv):
         arg = sys.argv[i]
-        if arg in ('-u', '--url'):
+        if arg in ('-h', '--help'):
+            print_help()
+        elif arg in ('-u', '--url'):
             i += 1
             if i < len(sys.argv):
                 args['url'] = sys.argv[i]
