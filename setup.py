@@ -6,7 +6,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="fckr",
-    version="0.8",
+    version="0.9",
     author="AKM Korishee Apurbo",
     author_email="bandinvisible8@gmail.com",
     description="FCKR – The Ultimate Brute Forcer",
