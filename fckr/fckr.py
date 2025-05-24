@@ -189,8 +189,8 @@ FCKR – The Ultimate Brute Forcer - A tool for brute-forcing HTTP requests with
 Usage: fckr <options>
 
 Options:
-  -h, --header <headers>  HTTP headers as a semicolon-separated string (e.g., "Cookie:JSESSIONID=abc123;Content-Type:application/json")
-  --help                  Show this help message and exit
+  -H, --header <headers>  HTTP headers as a semicolon-separated string (e.g., "Cookie:JSESSIONID=abc123;Content-Type:application/json")
+  -h, --help              Show this help message and exit
   -u, --url <url>         Target URL with FCK placeholder (e.g., https://example.com/?q=FCK) (required)
   -b, --body <body>       POST body with FCK placeholder (e.g., searchFor=FCK&goButton=go)
   -w, --wordlist <file>   Path to wordlist file (required)
@@ -229,7 +229,7 @@ Notes:
   - Either -u alone (for GET) or -u with -b (for POST) must be provided.
   - URL must contain 'FCK' for GET requests; body must contain 'FCK' for POST requests.
   - Use -o or --output to save results to a file.
-  - Use -h or --header to include custom headers like cookies or content-type, separated by semicolons.
+  - Use -H or --header to include custom headers like cookies or content-type, separated by semicolons.
     """
     console.print(help_text)
     sys.exit(0)
@@ -253,11 +253,11 @@ def parse_arguments() -> dict:
     i = 1
     while i < len(sys.argv):
         arg = sys.argv[i]
-        if arg in ('-h', '--header'):
+        if arg in ('-H', '--header'):
             i += 1
             if i < len(sys.argv):
                 args['headers'] = sys.argv[i]
-        elif arg == '--help':
+        elif arg == ('-h','--help'):
             print_help()
         elif arg in ('-u', '--url'):
             i += 1
