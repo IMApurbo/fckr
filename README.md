@@ -1,6 +1,6 @@
 # FCKR – The Ultimate Brute Forcer
 
-**FCKR** is a command-line tool designed for **security researchers** and **penetration testers** to brute-force HTTP requests with powerful and customizable filtering capabilities. It replaces the `FCKR` placeholder in URLs or POST bodies with values from a wordlist, allowing you to test web endpoints and inspect/filter responses.
+**FCKR** is a command-line tool designed for **security researchers** and **penetration testers** to brute-force HTTP requests with powerful and customizable filtering capabilities. It replaces the `FCK` placeholder in URLs or POST bodies with values from a wordlist, allowing you to test web endpoints and inspect/filter responses.
 
 > ✨ Developed by **[@IMApurbo](https://github.com/imapurbo)**  
 > 🛡️ Use responsibly. Authorized testing only.
@@ -64,7 +64,7 @@ pip install fckr
 ## ⚙️ Usage
 
 ```bash
-fckr -u "<url_with_FCKR>" -w <wordlist> [options]
+fckr -u "<url_with_FCK>" -w <wordlist> [options]
 ```
 
 ### Common Flags
