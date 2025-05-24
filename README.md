@@ -10,7 +10,7 @@
 ## 🚀 Features
 
 - **Flexible Brute-Forcing**  
-  Replace `FCKR` placeholders in URLs or POST bodies with wordlist entries.
+  Replace `FCK` placeholders in URLs or POST bodies with wordlist entries.
 
 - **HTTP Method Support**  
   Supports both `GET` and `POST` methods.
@@ -71,8 +71,8 @@ fckr -u "<url_with_FCKR>" -w <wordlist> [options]
 
 | Short | Long               | Description                                      | Required | Default |
 | ----- | ------------------ | ------------------------------------------------ | -------- | ------- |
-| `-u`  | `--url`            | Target URL with `FCKR` placeholder                | ✅        | -       |
-| `-b`  | `--body`           | POST body with `FCKR` (use with POST only)        | 🟡       | -       |
+| `-u`  | `--url`            | Target URL with `FCK` placeholder                | ✅        | -       |
+| `-b`  | `--body`           | POST body with `FCK` (use with POST only)        | 🟡       | -       |
 | `-w`  | `--wordlist`       | Path to wordlist                                 | ✅        | -       |
 | `-m`  | `--method`         | HTTP method (`GET` or `POST`)                    | ❌        | GET     |
 | `-t`  | `--timeout`        | Timeout in seconds                               | ❌        | 5.0     |
@@ -119,13 +119,13 @@ Format:
 **Brute-force with GET:**
 
 ```bash
-fckr -u "https://test.com/search?q=FCKR" -w list.txt -m GET
+fckr -u "https://test.com/search?q=FCK" -w list.txt -m GET
 ```
 
 **POST request with body:**
 
 ```bash
-fckr -u "http://test.com/search" -b "query=FCKR&submit=1" -w list.txt -m POST
+fckr -u "http://test.com/search" -b "query=FCK&submit=1" -w list.txt -m POST
 ```
 
 **Filter by content:**
@@ -167,7 +167,7 @@ search
 git clone https://github.com/IMApurbo/fckr.git
 cd fckr
 pip install -r requirements.txt
-python -m fckr -u "https://example.com/?q=FCKR" -w list.txt
+python -m fckr -u "https://example.com/?q=FCK" -w list.txt
 ```
 
 ---
@@ -188,5 +188,3 @@ python -m fckr -u "https://example.com/?q=FCKR" -w list.txt
 ## 📃 License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-
