@@ -269,7 +269,7 @@ def main():
 
     matches_found = False
     progress = Progress(
-        TextColumn("[cyan]Working..."),
+        TextColumn("[cyan]Running..."),
         BarColumn(
             bar_width=40,
             complete_style=Style(color="#0066ff"),
