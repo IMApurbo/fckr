@@ -37,6 +37,9 @@
 - **Threading (-T)**  
   Speed up Brute-Forcing
 
+- **Define Header (-H)**  
+  HTTP headers as a semicolon-separated string (e.g., "Cookie:JSESSIONID=abc123;Content-Type:application/json")
+
 - **Progress Bar**  
   Stylish visual feedback during brute-forcing.
 
@@ -80,7 +83,9 @@ fckr -u "<url_with_FCK>" -w <wordlist> [options]
 | `-o`  | `--output`         | Save results to a file (e.g., `result.txt`)      | ❌        | -       |
 | `-r`  | `--fetch-response` | Fetch full HTML for a specific word              | ❌        | -       |
 | `-d`  | `--debug`          | Show request and filter logs                     | ❌        | False   |
+| `-H`  | `--header`         | HTTP headers as a semicolon-separated string     | ❌        | -       |
 | `-T`  | `--threads`        | Number of concurrent threads                     | ❌        | 10      |
+| `-h`  | `--help`           | Show this help message and exit                  | ❌        | -       |
 
 ---
 
