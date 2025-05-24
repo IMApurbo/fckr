@@ -93,19 +93,33 @@ def prepare_request(url: str, body: Optional[str], word: str, method: str) -> Tu
             data = body
     return full_url, data
 
-def make_request(url: str, method: str, data: Optional[Dict[str, str]], timeout: float, debug: bool) -> dict:
+def make_request(url: str, method: str, data: Optional[Dict[str, str]], timeout: float, debug: bool, headers: Optional[str] = None) -> dict:
     """Make an HTTP request and return response details."""
     try:
         start_time = time.time()
-        headers = {'Content-Type': 'application/x-www-form-urlencoded'} if method.upper() == 'POST' else {}
+        # Initialize headers dictionary
+        request_headers = {'Content-Type': 'application/x-www-form-urlencoded'} if method.upper() == 'POST' else {}
+        
+        # Parse provided headers
+        if headers:
+            header_list = headers.split(';')
+            for header_str in header_list:
+                header_str = header_str.strip()
+                if header_str:
+                    try:
+                        key, value = header_str.split(':', 1)
+                        request_headers[key.strip()] = value.strip()
+                    except ValueError:
+                        console.print(f"[yellow]Warning: Invalid header format '{header_str}'. Expected 'Key:Value'. Skipping.[/yellow]")
+        
+        if debug:
+            console.print(f"[yellow]Debug: Sending {method.upper()} to {url} with headers: {request_headers}, body: {data or 'no body'}[/yellow]")
+        
         if method.upper() == 'POST':
-            if debug:
-                console.print(f"[yellow]Debug: Sending POST to {url} with body: {data or 'no body'}[/yellow]")
-            response = requests.post(url, data=data, timeout=timeout, headers=headers)
+            response = requests.post(url, data=data, timeout=timeout, headers=request_headers)
         else:
-            if debug:
-                console.print(f"[yellow]Debug: Sending GET to {url}[/yellow]")
-            response = requests.get(url, timeout=timeout)
+            response = requests.get(url, timeout=timeout, headers=request_headers)
+        
         elapsed_time = time.time() - start_time
         return {
             's': response.status_code,
@@ -175,35 +189,36 @@ FCKR – The Ultimate Brute Forcer - A tool for brute-forcing HTTP requests with
 Usage: fckr <options>
 
 Options:
-  -h, --help              Show this help message and exit
+  -h, --header <headers>  HTTP headers as a semicolon-separated string (e.g., "Cookie:JSESSIONID=abc123;Content-Type:application/json")
+  --help                  Show this help message and exit
   -u, --url <url>         Target URL with FCK placeholder (e.g., https://example.com/?q=FCK) (required)
   -b, --body <body>       POST body with FCK placeholder (e.g., searchFor=FCK&goButton=go)
   -w, --wordlist <file>   Path to wordlist file (required)
   -m, --method <GET|POST> HTTP method (default: GET)
   -t, --timeout <seconds> Request timeout in seconds (default: 5.0)
   -o, --output <file>     Save results to a file (e.g., result.txt)
-  -f, --filter <filter>        Filter which responses are displayed.
-                               If no -f filters are provided, all responses that pass filters are displayed. Use -f filters
-                               to narrow down the output to specific results of interest, such as successful responses, responses
-                               with specific content, or responses meeting certain criteria
-                               Multiple -f filters can be specified, and a response is displayed if it matches any one of them.
-                               Format: <s|l|c>:<e|c|nc>:<value>
-                               Fields:
-                                 - s: Status code (e.g., 200, 404)
-                                 - l: Content length (e.g., 1234)
-                                 - c: Response body content (e.g., success, <title>Login</title>)
-                               Types:
-                                 - e: Exact match (e.g., status code or length must match exactly)
-                                 - c: Contains match (case-insensitive, HTML attributes normalized)
-                                 - nc: Not contains match (case-insensitive, HTML attributes normalized)
-                               Examples:
-                                 - s:e:200 (display responses with status code exactly 200)
-                                 - c:c:success (display responses containing 'success' in the body)
-                                 - c:nc:error (display responses not containing 'error' in the body)
-                                 - l:e:1000 (display responses with content length exactly 1000)
-                                 - c:c:'<h2 class=lead>results</h2>' (display responses with specific HTML)
-                                 - s:c:20 (display responses with status codes starting with '20', e.g., 200, 201)
-                                 - l:c:100 (display responses with content length containing '100', e.g., 100, 1000)
+  -f, --filter <filter>   Filter which responses are displayed.
+                          If no -f filters are provided, all responses that pass filters are displayed. Use -f filters
+                          to narrow down the output to specific results of interest, such as successful responses, responses
+                          with specific content, or responses meeting certain criteria
+                          Multiple -f filters can be specified, and a response is displayed if it matches any one of them.
+                          Format: <s|l|c>:<e|c|nc>:<value>
+                          Fields:
+                            - s: Status code (e.g., 200, 404)
+                            - l: Content length (e.g., 1234)
+                            - c: Response body content (e.g., success, <title>Login</title>)
+                          Types:
+                            - e: Exact match (e.g., status code or length must match exactly)
+                            - c: Contains match (case-insensitive, HTML attributes normalized)
+                            - nc: Not contains match (case-insensitive, HTML attributes normalized)
+                          Examples:
+                            - s:e:200 (display responses with status code exactly 200)
+                            - c:c:success (display responses containing 'success' in the body)
+                            - c:nc:error (display responses not containing 'error' in the body)
+                            - l:e:1000 (display responses with content length exactly 1000)
+                            - c:c:'<h2 class=lead>results</h2>' (display responses with specific HTML)
+                            - s:c:20 (display responses with status codes starting with '20', e.g., 200, 201)
+                            - l:c:100 (display responses with content length containing '100', e.g., 100, 1000)
   -r, --fetch-response <word> Fetch full HTML response for a specific word
   -d, --debug                 Enable debug mode to log requests and filter mismatches
   -T, --threads <number>      Number of concurrent threads (default: 10)
@@ -214,6 +229,7 @@ Notes:
   - Either -u alone (for GET) or -u with -b (for POST) must be provided.
   - URL must contain 'FCK' for GET requests; body must contain 'FCK' for POST requests.
   - Use -o or --output to save results to a file.
+  - Use -h or --header to include custom headers like cookies or content-type, separated by semicolons.
     """
     console.print(help_text)
     sys.exit(0)
@@ -230,13 +246,18 @@ def parse_arguments() -> dict:
         'fetch_response': None,
         'debug': False,
         'threads': 10,
-        'output': None  # Added for output file
+        'output': None,
+        'headers': None
     }
     
     i = 1
     while i < len(sys.argv):
         arg = sys.argv[i]
-        if arg in ('-h', '--help'):
+        if arg in ('-h', '--header'):
+            i += 1
+            if i < len(sys.argv):
+                args['headers'] = sys.argv[i]
+        elif arg == '--help':
             print_help()
         elif arg in ('-u', '--url'):
             i += 1
@@ -316,8 +337,8 @@ def parse_arguments() -> dict:
 def process_word(word: str, args: dict, output_filters: List[dict]) -> Tuple[str, Optional[dict]]:
     """Process a single word: make request, apply filters, and return result."""
     url, data = prepare_request(args['url'], args['body'], word, args['method'])
-    response = make_request(url, args['method'], data, args['timeout'], args['debug'])
-
+    response = make_request(url, args['method'], data, args['timeout'], args['debug'], args['headers'])
+    
     should_display = not output_filters
     for f in output_filters:
         if matches_filter(response, f['type'], f['value'], f['field']):
@@ -346,6 +367,8 @@ def main():
     console.print(f"[bold]Target:[/bold] {args['url'].replace('FCK', '<word>')}")
     if args['body']:
         console.print(f"[bold]Body:[/bold] {args['body'].replace('FCK', '<word>')}")
+    if args['headers']:
+        console.print(f"[bold]Headers:[/bold] {args['headers']}")
     console.print(f"[bold]Output Filters:[/bold] {output_filters}")
     console.print(f"[bold]Threads:[/bold] {args['threads']}")
     if args['fetch_response']:
@@ -369,7 +392,7 @@ def main():
                 output_file.close()
             sys.exit(1)
         url, data = prepare_request(args['url'], args['body'], args['fetch_response'], args['method'])
-        response = make_request(url, args['method'], data, args['timeout'], args['debug'])
+        response = make_request(url, args['method'], data, args['timeout'], args['debug'], args['headers'])
         console.print(f"[bold cyan]HTML Response for '{args['fetch_response']}':[/bold cyan]")
         console.print(response['c'])
         console.print("-" * 80)
@@ -409,7 +432,7 @@ def main():
                 }
                 for future in as_completed(future_to_word):
                     word, response = future.result()
-                    progress.advance(task)  # Update progress in the main thread
+                    progress.advance(task)
                     if response:
                         matches_found = True
                         error = f" | Error: {response['error']}" if response.get('error') else ""
@@ -417,7 +440,7 @@ def main():
                         console.print(f"[bold]{result_line}[/bold]")
                         if output_file:
                             output_file.write(result_line + "\n")
-                    time.sleep(0.01)  # Small delay to prevent server overload
+                    time.sleep(0.01)
         
         if matches_found:
             console.print("[bold magenta]💀 Brute Force Complete! All words processed successfully! 💀[/bold magenta]")
