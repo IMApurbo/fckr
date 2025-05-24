@@ -181,19 +181,12 @@ Options:
   -w, --wordlist <file>   Path to wordlist file (required)
   -m, --method <GET|POST> HTTP method (default: GET)
   -t, --timeout <seconds> Request timeout in seconds (default: 5.0)
-  -F, --filter <filter>   Filter responses before processing. Only responses matching ALL -F filters proceed.
-                          Format: <s|l|c>:<e|c|nc>:<value>
-                          Fields: s (status code), l (content length), c (response body)
-                          Types: e (exact match), c (contains, case-insensitive), nc (not contains, case-insensitive)
-                          Examples: s:e:200, c:c:success, c:nc:something, l:e:1000
-  -o, --output-filter <filter> Filter which responses are displayed. Responses must match AT LEAST ONE -o filter to be shown.
-                               Unlike -F filters, which must ALL match for a response to be processed further, -o filters
-                               control which processed responses are displayed in the output. If no -o filters are provided,
-                               all responses that pass -F filters are displayed. Use -o filters to narrow down the output
-                               to specific results of interest, such as successful responses, responses with specific content,
-                               or responses meeting certain criteria. Multiple -o filters can be specified, and a response
-                               is displayed if it matches any one of them. This is useful for focusing on relevant results
-                               without modifying the processing logic defined by -F filters.
+  -o, --output <file>     Save results to a file (e.g., result.txt)
+  -f, --filter <filter>        Filter which responses are displayed.
+                               If no -f filters are provided, all responses that pass filters are displayed. Use -f filters
+                               to narrow down the output to specific results of interest, such as successful responses, responses
+                               with specific content, or responses meeting certain criteria
+                               Multiple -f filters can be specified, and a response is displayed if it matches any one of them.
                                Format: <s|l|c>:<e|c|nc>:<value>
                                Fields:
                                  - s: Status code (e.g., 200, 404)
@@ -220,6 +213,7 @@ Notes:
   - Use -b to specify the POST body for POST requests.
   - Either -u alone (for GET) or -u with -b (for POST) must be provided.
   - URL must contain 'FCK' for GET requests; body must contain 'FCK' for POST requests.
+  - Use -o or --output to save results to a file.
     """
     console.print(help_text)
     sys.exit(0)
@@ -232,11 +226,11 @@ def parse_arguments() -> dict:
         'wordlist': None,
         'method': 'GET',
         'timeout': 5.0,
-        'filter': [],
         'output_filter': [],
         'fetch_response': None,
         'debug': False,
-        'threads': 10
+        'threads': 10,
+        'output': None  # Added for output file
     }
     
     i = 1
@@ -268,11 +262,7 @@ def parse_arguments() -> dict:
                 except ValueError:
                     console.print(f"[red]Error: Invalid timeout value '{sys.argv[i]}'. Must be a number.[/red]")
                     sys.exit(1)
-        elif arg in ('-F', '--filter'):
-            i += 1
-            if i < len(sys.argv):
-                args['filter'].append(sys.argv[i])
-        elif arg in ('-o', '--output-filter'):
+        elif arg in ('-f', '--filter'):
             i += 1
             if i < len(sys.argv):
                 args['output_filter'].append(sys.argv[i])
@@ -290,6 +280,10 @@ def parse_arguments() -> dict:
                 except ValueError:
                     console.print(f"[red]Error: Invalid threads value '{sys.argv[i]}'. Must be an integer.[/red]")
                     sys.exit(1)
+        elif arg in ('-o', '--output'):
+            i += 1
+            if i < len(sys.argv):
+                args['output'] = sys.argv[i]
         else:
             console.print(f"[red]Unknown argument: {arg}[/red]")
             sys.exit(1)
@@ -319,20 +313,10 @@ def parse_arguments() -> dict:
     
     return args
 
-def process_word(word: str, args: dict, filters: List[dict], output_filters: List[dict]) -> Tuple[str, Optional[dict]]:
+def process_word(word: str, args: dict, output_filters: List[dict]) -> Tuple[str, Optional[dict]]:
     """Process a single word: make request, apply filters, and return result."""
     url, data = prepare_request(args['url'], args['body'], word, args['method'])
     response = make_request(url, args['method'], data, args['timeout'], args['debug'])
-
-    should_skip = False
-    for f in filters:
-        if not matches_filter(response, f['type'], f['value'], f['field']):
-            should_skip = True
-            break
-    if should_skip:
-        if args['debug']:
-            console.print(f"[yellow]Debug: Word '{word}' skipped by filter {f}[/yellow]")
-        return word, None
 
     should_display = not output_filters
     for f in output_filters:
@@ -355,7 +339,6 @@ def main():
     console.print("-" * 80)
 
     words = load_wordlist(args['wordlist'])
-    filters = parse_filters(args['filter'])
     output_filters = parse_filters(args['output_filter'])
 
     console.print(f"[bold]Starting brute force with {len(words)} words...[/bold]")
@@ -363,16 +346,27 @@ def main():
     console.print(f"[bold]Target:[/bold] {args['url'].replace('FCK', '<word>')}")
     if args['body']:
         console.print(f"[bold]Body:[/bold] {args['body'].replace('FCK', '<word>')}")
-    console.print(f"[bold]Filters:[/bold] {filters}")
     console.print(f"[bold]Output Filters:[/bold] {output_filters}")
     console.print(f"[bold]Threads:[/bold] {args['threads']}")
     if args['fetch_response']:
         console.print(f"[bold]Fetching response for word:[/bold] {args['fetch_response']}")
+    if args['output']:
+        console.print(f"[bold]Output File:[/bold] {args['output']}")
     console.print("-" * 80)
+
+    output_file = None
+    if args['output']:
+        try:
+            output_file = open(args['output'], 'w', encoding='utf-8')
+        except Exception as e:
+            console.print(f"[red]Error: Could not open output file '{args['output']}': {e}[/red]")
+            sys.exit(1)
 
     if args['fetch_response']:
         if args['fetch_response'] not in words:
             console.print(f"[red]Error: Word '{args['fetch_response']}' not in wordlist.[/red]")
+            if output_file:
+                output_file.close()
             sys.exit(1)
         url, data = prepare_request(args['url'], args['body'], args['fetch_response'], args['method'])
         response = make_request(url, args['method'], data, args['timeout'], args['debug'])
@@ -382,6 +376,13 @@ def main():
         console.print(f"[bold]Status:[/bold] {response['s']} | [bold]Length:[/bold] {response['l']} | [bold]Time:[/bold] {response['t']:.2f}s")
         if response.get('error'):
             console.print(f"[red]Error: {response['error']}[/red]")
+        if output_file:
+            output_file.write(f"Word: {args['fetch_response']} | Status: {response['s']} | Length: {response['l']} | Time: {response['t']:.2f}s")
+            if response.get('error'):
+                output_file.write(f" | Error: {response['error']}")
+            output_file.write("\n")
+            output_file.write(f"Response:\n{response['c']}\n{'-' * 80}\n")
+            output_file.close()
         return
 
     matches_found = False
@@ -403,7 +404,7 @@ def main():
             task = progress.add_task("Working...", total=len(words))
             with ThreadPoolExecutor(max_workers=args['threads']) as executor:
                 future_to_word = {
-                    executor.submit(process_word, word, args, filters, output_filters): word
+                    executor.submit(process_word, word, args, output_filters): word
                     for word in words
                 }
                 for future in as_completed(future_to_word):
@@ -411,8 +412,11 @@ def main():
                     progress.advance(task)  # Update progress in the main thread
                     if response:
                         matches_found = True
-                        error = f" [red]Error: {response['error']}[/red]" if response.get('error') else ""
-                        console.print(f"[bold]Word:[/bold] {word} | [bold]Status:[/bold] {response['s']} | [bold]Length:[/bold] {response['l']} | [bold]Time:[/bold] {response['t']:.2f}s{error}")
+                        error = f" | Error: {response['error']}" if response.get('error') else ""
+                        result_line = f"Word: {word} | Status: {response['s']} | Length: {response['l']} | Time: {response['t']:.2f}s{error}"
+                        console.print(f"[bold]{result_line}[/bold]")
+                        if output_file:
+                            output_file.write(result_line + "\n")
                     time.sleep(0.01)  # Small delay to prevent server overload
         
         if matches_found:
@@ -425,7 +429,12 @@ def main():
     
     except KeyboardInterrupt:
         console.print("\n[red bold]Process stopped by user.[/red bold]")
+        if output_file:
+            output_file.close()
         sys.exit(1)
+    finally:
+        if output_file:
+            output_file.close()
 
 if __name__ == "__main__":
     main()
