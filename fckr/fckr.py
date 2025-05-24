@@ -1,4 +1,3 @@
-
 import requests
 import argparse
 import sys
@@ -29,16 +28,16 @@ def get_gradient_colors(start_rgb: tuple, end_rgb: tuple, steps: int) -> List[st
 def display_animated_logo():
     """Display ASCII logo and text with a typewriter-like typing effect and gradient colors."""
     logo = """
-  █████▒▄████▄   ██ ▄█▀
-▓██   ▒▒██▀ ▀█   ██▄█▒ 		   ╦╔╦╗╔═╗┌─┐┬ ┬┬─┐┌┐ ┌─┐
-▒████ ░▒▓█    ▄ ▓███▄░ 	AUTHOR:    ║║║║╠═╣├─┘│ │├┬┘├┴┐│ │
-░▓█▒  ░▒▓▓▄ ▄██▒▓██ █▄ 	           ╩╩ ╩╩ ╩┴  └─┘┴└─└─┘└─┘
-░▒█░   ▒ ▓███▀ ░▒██▒ █▄
- ▒ ░   ░ ░▒ ▒  ░▒ ▒▒ ▓▒
- ░       ░  ▒   ░ ░▒ ▒░
- ░ ░   ░        ░ ░░ ░ 
-       ░ ░      ░  ░   
-       ░                
+  █████▒▄████▄   ██ ▄█▀ ██▀███  
+▓██   ▒▒██▀ ▀█   ██▄█▒ ▓██ ▒ ██▒	       ╦╔╦╗╔═╗┌─┐┬ ┬┬─┐┌┐ ┌─┐
+▒████ ░▒▓█    ▄ ▓███▄░ ▓██ ░▄█ ▒    AUTHOR:    ║║║║╠═╣├─┘│ │├┬┘├┴┐│ │
+░▓█▒  ░▒▓▓▄ ▄██▒▓██ █▄ ▒██▀▀█▄  	       ╩╩ ╩╩ ╩┴  └─┘┴└─└─┘└─┘
+░▒█░   ▒ ▓███▀ ░▒██▒ █▄░██▓ ▒██▒
+ ▒ ░   ░ ░▒ ▒  ░▒ ▒▒ ▓▒░ ▒▓ ░▒▓░
+ ░       ░  ▒   ░ ░▒ ▒░  ░▒ ░ ▒░
+ ░ ░   ░        ░ ░░ ░   ░░   ░ 
+       ░ ░      ░  ░      ░     
+       ░                        
     """
     title = "The Ultimate Brute Forcer"
     developer = "Developed by: IMApurbo"
