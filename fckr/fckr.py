@@ -255,7 +255,7 @@ def main():
     )
     parser.add_argument('-r', '--fetch-response', help="Fetch full HTML response for a specific word")
     parser.add_argument('-d', '--debug', action='store_true', help="Enable debug mode to log requests and filter mismatches")
-    parser.add_argument('--threads', type=int, default=10, help="Number of concurrent threads (default: 10)")
+    parser.add_argument('-T','--threads', type=int, default=10, help="Number of concurrent threads (default: 10)")
     
     args = parser.parse_args()
 
