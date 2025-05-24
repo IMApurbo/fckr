@@ -189,7 +189,4 @@ python -m fckr -u "https://example.com/?q=FCKR" -w list.txt
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
----
-
-```
 
