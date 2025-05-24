@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name="fck",
+    name="fckr",
     version="0.1",
     author="AKM Korishee Apurbo",
     author_email="bandinvisible8@gmail.com",
