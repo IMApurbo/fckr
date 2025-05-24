@@ -16,7 +16,7 @@
   Supports both `GET` and `POST` methods.
 
 - **Advanced Filtering**  
-  - **Response Filters (-F)**: Filter based on:
+  - **Response Filters (-f)**: Filter based on:
     - `s`: status code
     - `l`: content length
     - `c`: response body
@@ -25,8 +25,8 @@
     - `c`: contains
     - `nc`: not contains
 
-- **Output Filters (-o)**  
-  Show only filtered results using the same logic as response filters.
+- **Output Saving (-o)**  
+  Save results to a file (e.g., result.txt).
 
 - **Response Inspection (-r)**  
   Fetch full HTML responses for specific inputs.
@@ -34,8 +34,8 @@
 - **Debug Mode (-d)**  
   Logs all requests and mismatched filters.
 
-- **Typewriter-Style ASCII Logo**  
-  Animated with gradient colors using `rich`.
+- **Threading (-T)**  
+  Speed up Brute-Forcing
 
 - **Progress Bar**  
   Stylish visual feedback during brute-forcing.
@@ -76,8 +76,8 @@ fckr -u "<url_with_FCK>" -w <wordlist> [options]
 | `-w`  | `--wordlist`       | Path to wordlist                                 | ✅        | -       |
 | `-m`  | `--method`         | HTTP method (`GET` or `POST`)                    | ❌        | GET     |
 | `-t`  | `--timeout`        | Timeout in seconds                               | ❌        | 5.0     |
-| `-F`  | `--filter`         | Filter response (e.g., `s:e:200`, `c:c:success`) | ❌        | -       |
-| `-o`  | `--output-filter`  | Control output display with same format          | ❌        | -       |
+| `-f`  | `--filter`         | Filter response (e.g., `s:e:200`, `c:c:success`) | ❌        | -       |
+| `-o`  | `--output`         | Save results to a file (e.g., `result.txt`)      | ❌        | -       |
 | `-r`  | `--fetch-response` | Fetch full HTML for a specific word              | ❌        | -       |
 | `-d`  | `--debug`          | Show request and filter logs                     | ❌        | False   |
 | `-T`  | `--threads`        | Number of concurrent threads                     | ❌        | 10      |
@@ -107,10 +107,10 @@ Format:
 ### Examples
 
 ```bash
--F s:e:200              # Process only 200 OK
--o c:nc:error          # Show results that do not contain "error"
--o c:c:login           # Show responses containing "login"
--o l:e:1000            # Show only 1000-byte responses
+-f s:e:200             # Show only 200 OK
+-f c:nc:error          # Show results that do not contain "error"
+-f c:c:login           # Show responses containing "login"
+-f l:e:1000            # Show only 1000-byte responses
 ```
 
 ---
