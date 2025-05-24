@@ -1,10 +1,8 @@
-import argparse
 import sys
 import re
 import time
 from typing import List, Tuple, Optional, Dict
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import threading
 import requests
 from urllib.parse import parse_qs, urlencode
 from rich.console import Console
@@ -169,10 +167,103 @@ def signal_handler(sig, frame):
     console.print("\n[red bold]Process stopped by user.[/red bold]")
     sys.exit(1)
 
-def process_word(word: str, args: 'argparse.Namespace', filters: List[dict], output_filters: List[dict], progress, task) -> Tuple[str, Optional[dict]]:
+def parse_arguments() -> dict:
+    """Parse command-line arguments manually."""
+    args = {
+        'url': None,
+        'body': None,
+        'wordlist': None,
+        'method': 'GET',
+        'timeout': 5.0,
+        'filter': [],
+        'output_filter': [],
+        'fetch_response': None,
+        'debug': False,
+        'threads': 10
+    }
+    
+    i = 1
+    while i < len(sys.argv):
+        arg = sys.argv[i]
+        if arg in ('-u', '--url'):
+            i += 1
+            if i < len(sys.argv):
+                args['url'] = sys.argv[i]
+        elif arg in ('-b', '--body'):
+            i += 1
+            if i < len(sys.argv):
+                args['body'] = sys.argv[i]
+        elif arg in ('-w', '--wordlist'):
+            i += 1
+            if i < len(sys.argv):
+                args['wordlist'] = sys.argv[i]
+        elif arg in ('-m', '--method'):
+            i += 1
+            if i < len(sys.argv) and sys.argv[i] in ('GET', 'POST'):
+                args['method'] = sys.argv[i]
+        elif arg in ('-t', '--timeout'):
+            i += 1
+            if i < len(sys.argv):
+                try:
+                    args['timeout'] = float(sys.argv[i])
+                except ValueError:
+                    console.print(f"[red]Error: Invalid timeout value '{sys.argv[i]}'. Must be a number.[/red]")
+                    sys.exit(1)
+        elif arg in ('-F', '--filter'):
+            i += 1
+            if i < len(sys.argv):
+                args['filter'].append(sys.argv[i])
+        elif arg in ('-o', '--output-filter'):
+            i += 1
+            if i < len(sys.argv):
+                args['output_filter'].append(sys.argv[i])
+        elif arg in ('-r', '--fetch-response'):
+            i += 1
+            if i < len(sys.argv):
+                args['fetch_response'] = sys.argv[i]
+        elif arg in ('-d', '--debug'):
+            args['debug'] = True
+        elif arg in ('-T', '--threads'):
+            i += 1
+            if i < len(sys.argv):
+                try:
+                    args['threads'] = int(sys.argv[i])
+                except ValueError:
+                    console.print(f"[red]Error: Invalid threads value '{sys.argv[i]}'. Must be an integer.[/red]")
+                    sys.exit(1)
+        else:
+            console.print(f"[red]Unknown argument: {arg}[/red]")
+            sys.exit(1)
+        i += 1
+    
+    # Validate required arguments
+    if not args['url']:
+        console.print("[red]Error: -u/--url is required.[/red]")
+        sys.exit(1)
+    if not args['wordlist']:
+        console.print("[red]Error: -w/--wordlist is required.[/red]")
+        sys.exit(1)
+    if args['method'].upper() == 'POST' and not args['body']:
+        console.print("[red]Error: -b/--body is required for POST requests.[/red]")
+        sys.exit(1)
+    if args['method'].upper() == 'GET' and args['body']:
+        console.print("[red]Error: -b/--body is not allowed for GET requests.[/red]")
+        sys.exit(1)
+    
+    # Check for FCK in URL (GET) or body (POST)
+    if args['method'].upper() == 'GET' and 'FCK' not in args['url']:
+        console.print("[red]Error: URL must contain 'FCK' placeholder for GET requests.[/red]")
+        sys.exit(1)
+    if args['method'].upper() == 'POST' and args['body'] and 'FCK' not in args['body']:
+        console.print("[red]Error: Body must contain 'FCK' placeholder for POST requests.[/red]")
+        sys.exit(1)
+    
+    return args
+
+def process_word(word: str, args: dict, filters: List[dict], output_filters: List[dict], progress, task) -> Tuple[str, Optional[dict]]:
     """Process a single word: make request, apply filters, and return result."""
-    url, data = prepare_request(args.url, args.body, word, args.method)
-    response = make_request(url, args.method, data, args.timeout, args.debug)
+    url, data = prepare_request(args['url'], args['body'], word, args['method'])
+    response = make_request(url, args['method'], data, args['timeout'], args['debug'])
 
     should_skip = False
     for f in filters:
@@ -180,7 +271,7 @@ def process_word(word: str, args: 'argparse.Namespace', filters: List[dict], out
             should_skip = True
             break
     if should_skip:
-        if args.debug:
+        if args['debug']:
             console.print(f"[yellow]Debug: Word '{word}' skipped by filter {f}[/yellow]")
         progress.advance(task)
         return word, None
@@ -192,7 +283,7 @@ def process_word(word: str, args: 'argparse.Namespace', filters: List[dict], out
             break
     if should_display:
         return word, response
-    elif args.debug:
+    elif args['debug']:
         console.print(f"[yellow]Debug: Word '{word}' did not match output filter {output_filters}[/yellow]")
     
     progress.advance(task)
@@ -201,97 +292,34 @@ def process_word(word: str, args: 'argparse.Namespace', filters: List[dict], out
 def main():
     signal.signal(signal.SIGINT, signal_handler)
     
-    parser = argparse.ArgumentParser(
-        description="CLI Request Brute Forcer - A tool for brute-forcing HTTP requests with customizable filters.\n\n"
-                    "Notes:\n"
-                    "- Use -u to specify the target URL.\n"
-                    "- Use -b to specify the POST body for POST requests.\n"
-                    "- Either -u alone (for GET) or -u with -b (for POST) must be provided."
-    )
-    parser.add_argument('-u', '--url', required=True, help="Target URL with FCK placeholder (e.g., https://example.com/?q=FCK)")
-    parser.add_argument('-b', '--body', help="POST body with FCK placeholder (e.g., searchFor=FCK&goButton=go)")
-    parser.add_argument('-w', '--wordlist', required=True, help="Path to wordlist file")
-    parser.add_argument('-m', '--method', choices=['GET', 'POST'], default='GET', help="HTTP method")
-    parser.add_argument('-t', '--timeout', type=float, default=5.0, help="Request timeout in seconds")
-    parser.add_argument(
-        '-F', '--filter',
-        action='append',
-        help="Filter responses before processing. Only responses matching ALL -F filters proceed.\n\n"
-             "Filtering Options:\n"
-             "  Fields:\n"
-             "    - s: Status code (e.g., 200, 404)\n"
-             "    - l: Content length (e.g., 1234)\n"
-             "    - c: Response body content (e.g., success, <title>Login</title>)\n\n"
-             "  Types:\n"
-             "    - e: Exact match\n"
-             "    - c: Contains match (case-insensitive, HTML attributes normalized)\n"
-             "    - nc: Not contains match (case-insensitive, HTML attributes normalized)\n\n"
-             "Examples:\n"
-             "  - s:e:200\n"
-             "  - c:c:success\n"
-             "  - c:nc:something\n"
-             "  - l:e:1000\n"
-             "  - c:c:'<h2 class=lead>results</h2>'"
-    )
-    parser.add_argument(
-        '-o', '--output-filter',
-        action='append',
-        help="Filter which responses are displayed. Responses must match AT LEAST ONE -o filter.\n\n"
-             "Filtering Options:\n"
-             "  Fields:\n"
-             "    - s: Status code (e.g., 200, 404)\n"
-             "    - l: Content length (e.g., 1234)\n"
-             "    - c: Response body content (e.g., success, <title>Login</title>)\n\n"
-             "  Types:\n"
-             "    - e: Exact match\n"
-             "    - c: Contains match (case-insensitive, HTML attributes normalized)\n"
-             "    - nc: Not contains match (case-insensitive, HTML attributes normalized)\n\n"
-             "Examples:\n"
-             "  - s:e:200\n"
-             "  - c:c:success\n"
-             "  - c:nc:something\n"
-             "  - l:e:1000\n"
-             "  - c:c:'<h2 class=lead>results</h2>'"
-    )
-    parser.add_argument('-r', '--fetch-response', help="Fetch full HTML response for a specific word")
-    parser.add_argument('-d', '--debug', action='store_true', help="Enable debug mode to log requests and filter mismatches")
-    parser.add_argument('-T','--threads', type=int, default=10, help="Number of concurrent threads (default: 10)")
+    args = parse_arguments()
     
-    args = parser.parse_args()
-
-    if args.method.upper() == 'POST' and not args.body:
-        console.print("[red]Error: -b/--body is required for POST requests.[/red]")
-        sys.exit(1)
-    if args.method.upper() == 'GET' and args.body:
-        console.print("[red]Error: -b/--body is not allowed for GET requests.[/red]")
-        sys.exit(1)
-
     display_animated_logo()
     console.print("-" * 80)
 
-    words = load_wordlist(args.wordlist)
-    filters = parse_filters(args.filter or [])
-    output_filters = parse_filters(args.output_filter or [])
+    words = load_wordlist(args['wordlist'])
+    filters = parse_filters(args['filter'])
+    output_filters = parse_filters(args['output_filter'])
 
     console.print(f"[bold]Starting brute force with {len(words)} words...[/bold]")
-    console.print(f"[bold]Method:[/bold] {args.method}")
-    console.print(f"[bold]Target:[/bold] {args.url.replace('FCK', '<word>')}")
-    if args.body:
-        console.print(f"[bold]Body:[/bold] {args.body.replace('FCK', '<word>')}")
+    console.print(f"[bold]Method:[/bold] {args['method']}")
+    console.print(f"[bold]Target:[/bold] {args['url'].replace('FCK', '<word>')}")
+    if args['body']:
+        console.print(f"[bold]Body:[/bold] {args['body'].replace('FCK', '<word>')}")
     console.print(f"[bold]Filters:[/bold] {filters}")
     console.print(f"[bold]Output Filters:[/bold] {output_filters}")
-    console.print(f"[bold]Threads:[/bold] {args.threads}")
-    if args.fetch_response:
-        console.print(f"[bold]Fetching response for word:[/bold] {args.fetch_response}")
+    console.print(f"[bold]Threads:[/bold] {args['threads']}")
+    if args['fetch_response']:
+        console.print(f"[bold]Fetching response for word:[/bold] {args['fetch_response']}")
     console.print("-" * 80)
 
-    if args.fetch_response:
-        if args.fetch_response not in words:
-            console.print(f"[red]Error: Word '{args.fetch_response}' not in wordlist.[/red]")
+    if args['fetch_response']:
+        if args['fetch_response'] not in words:
+            console.print(f"[red]Error: Word '{args['fetch_response']}' not in wordlist.[/red]")
             sys.exit(1)
-        url, data = prepare_request(args.url, args.body, args.fetch_response, args.method)
-        response = make_request(url, args.method, data, args.timeout, args.debug)
-        console.print(f"[bold cyan]HTML Response for '{args.fetch_response}':[/bold cyan]")
+        url, data = prepare_request(args['url'], args['body'], args['fetch_response'], args['method'])
+        response = make_request(url, args['method'], data, args['timeout'], args['debug'])
+        console.print(f"[bold cyan]HTML Response for '{args['fetch_response']}':[/bold cyan]")
         console.print(response['c'])
         console.print("-" * 80)
         console.print(f"[bold]Status:[/bold] {response['s']} | [bold]Length:[/bold] {response['l']} | [bold]Time:[/bold] {response['t']:.2f}s")
@@ -316,7 +344,7 @@ def main():
     try:
         with Live(progress, console=console, transient=True):
             task = progress.add_task("Working...", total=len(words))
-            with ThreadPoolExecutor(max_workers=args.threads) as executor:
+            with ThreadPoolExecutor(max_workers=args['threads']) as executor:
                 future_to_word = {
                     executor.submit(process_word, word, args, filters, output_filters, progress, task): word
                     for word in words
@@ -330,11 +358,11 @@ def main():
                     time.sleep(0.01)  # Small delay to prevent server overload
         
         if matches_found:
-            console.print("[bold magenta]🎉 Brute Force Complete! All words processed successfully! 🎉[/bold magenta]")
+            console.print("[bold magenta]💀 Brute Force Complete! All words processed successfully! 💀[/bold magenta]")
         else:
             console.print("[bold yellow]⚠ Brute Force Complete! No matches found. Check filters or use -r to inspect HTML. ⚠[/bold yellow]")
         
-        if args.debug and not matches_found:
+        if args['debug'] and not matches_found:
             console.print("[yellow]Debug: No responses matched the output filters. Try inspecting HTML with -r or adjusting the filter.[/yellow]")
     
     except KeyboardInterrupt:
