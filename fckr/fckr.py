@@ -1,17 +1,18 @@
-import requests
 import argparse
 import sys
 import re
 import time
-from typing import Optional, List, Tuple, Dict
+from typing import List, Tuple, Optional, Dict
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
+import requests
+from urllib.parse import parse_qs, urlencode
 from rich.console import Console
 from rich.progress import Progress, BarColumn, TextColumn, TimeElapsedColumn
 from rich.text import Text
-from rich import print as rprint
 from rich.live import Live
 from rich.style import Style
 import signal
-from urllib.parse import parse_qs, urlencode
 
 console = Console()
 
@@ -26,7 +27,7 @@ def get_gradient_colors(start_rgb: tuple, end_rgb: tuple, steps: int) -> List[st
     return colors
 
 def display_animated_logo():
-    """Display ASCII logo and text with a typewriter-like typing effect and gradient colors."""
+    """Display ASCII logo with a typewriter-like effect and gradient colors."""
     logo = """
   █████▒▄████▄   ██ ▄█▀ ██▀███  
 ▓██   ▒▒██▀ ▀█   ██▄█▒ ▓██ ▒ ██▒	       ╦╔╦╗╔═╗┌─┐┬ ┬┬─┐┌┐ ┌─┐
@@ -168,6 +169,35 @@ def signal_handler(sig, frame):
     console.print("\n[red bold]Process stopped by user.[/red bold]")
     sys.exit(1)
 
+def process_word(word: str, args: 'argparse.Namespace', filters: List[dict], output_filters: List[dict], progress, task) -> Tuple[str, Optional[dict]]:
+    """Process a single word: make request, apply filters, and return result."""
+    url, data = prepare_request(args.url, args.body, word, args.method)
+    response = make_request(url, args.method, data, args.timeout, args.debug)
+
+    should_skip = False
+    for f in filters:
+        if not matches_filter(response, f['type'], f['value'], f['field']):
+            should_skip = True
+            break
+    if should_skip:
+        if args.debug:
+            console.print(f"[yellow]Debug: Word '{word}' skipped by filter {f}[/yellow]")
+        progress.advance(task)
+        return word, None
+
+    should_display = not output_filters
+    for f in output_filters:
+        if matches_filter(response, f['type'], f['value'], f['field']):
+            should_display = True
+            break
+    if should_display:
+        return word, response
+    elif args.debug:
+        console.print(f"[yellow]Debug: Word '{word}' did not match output filter {output_filters}[/yellow]")
+    
+    progress.advance(task)
+    return word, None
+
 def main():
     signal.signal(signal.SIGINT, signal_handler)
     
@@ -178,7 +208,7 @@ def main():
                     "- Use -b to specify the POST body for POST requests.\n"
                     "- Either -u alone (for GET) or -u with -b (for POST) must be provided."
     )
-    parser.add_argument('-u', '--url', required=True, help="Target URL with optional FCK placeholder (e.g., https://example.com/?q=FCK)")
+    parser.add_argument('-u', '--url', required=True, help="Target URL with FCK placeholder (e.g., https://example.com/?q=FCK)")
     parser.add_argument('-b', '--body', help="POST body with FCK placeholder (e.g., searchFor=FCK&goButton=go)")
     parser.add_argument('-w', '--wordlist', required=True, help="Path to wordlist file")
     parser.add_argument('-m', '--method', choices=['GET', 'POST'], default='GET', help="HTTP method")
@@ -225,6 +255,7 @@ def main():
     )
     parser.add_argument('-r', '--fetch-response', help="Fetch full HTML response for a specific word")
     parser.add_argument('-d', '--debug', action='store_true', help="Enable debug mode to log requests and filter mismatches")
+    parser.add_argument('--threads', type=int, default=10, help="Number of concurrent threads (default: 10)")
     
     args = parser.parse_args()
 
@@ -249,6 +280,7 @@ def main():
         console.print(f"[bold]Body:[/bold] {args.body.replace('FCK', '<word>')}")
     console.print(f"[bold]Filters:[/bold] {filters}")
     console.print(f"[bold]Output Filters:[/bold] {output_filters}")
+    console.print(f"[bold]Threads:[/bold] {args.threads}")
     if args.fetch_response:
         console.print(f"[bold]Fetching response for word:[/bold] {args.fetch_response}")
     console.print("-" * 80)
@@ -284,35 +316,18 @@ def main():
     try:
         with Live(progress, console=console, transient=True):
             task = progress.add_task("Working...", total=len(words))
-            for word in words:
-                url, data = prepare_request(args.url, args.body, word, args.method)
-                response = make_request(url, args.method, data, args.timeout, args.debug)
-
-                should_skip = False
-                for f in filters:
-                    if not matches_filter(response, f['type'], f['value'], f['field']):
-                        should_skip = True
-                        break
-                if should_skip:
-                    if args.debug:
-                        console.print(f"[yellow]Debug: Word '{word}' skipped by filter {f}[/yellow]")
-                    progress.advance(task)
-                    continue
-
-                should_display = not output_filters
-                for f in output_filters:
-                    if matches_filter(response, f['type'], f['value'], f['field']):
-                        should_display = True
-                        break
-                if should_display:
-                    matches_found = True
-                    error = f" [red]Error: {response['error']}[/red]" if response.get('error') else ""
-                    console.print(f"[bold]Word:[/bold] {word} | [bold]Status:[/bold] {response['s']} | [bold]Length:[/bold] {response['l']} | [bold]Time:[/bold] {response['t']:.2f}s{error}")
-                elif args.debug:
-                    console.print(f"[yellow]Debug: Word '{word}' did not match output filter {output_filters}[/yellow]")
-                
-                progress.advance(task)
-                time.sleep(0.5)
+            with ThreadPoolExecutor(max_workers=args.threads) as executor:
+                future_to_word = {
+                    executor.submit(process_word, word, args, filters, output_filters, progress, task): word
+                    for word in words
+                }
+                for future in as_completed(future_to_word):
+                    word, response = future.result()
+                    if response:
+                        matches_found = True
+                        error = f" [red]Error: {response['error']}[/red]" if response.get('error') else ""
+                        console.print(f"[bold]Word:[/bold] {word} | [bold]Status:[/bold] {response['s']} | [bold]Length:[/bold] {response['l']} | [bold]Time:[/bold] {response['t']:.2f}s{error}")
+                    time.sleep(0.01)  # Small delay to prevent server overload
         
         if matches_found:
             console.print("[bold magenta]🎉 Brute Force Complete! All words processed successfully! 🎉[/bold magenta]")
