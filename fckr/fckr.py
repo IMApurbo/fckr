@@ -97,10 +97,8 @@ def make_request(url: str, method: str, data: Optional[Dict[str, str]], timeout:
     """Make an HTTP request and return response details."""
     try:
         start_time = time.time()
-        # Initialize headers dictionary
         request_headers = {'Content-Type': 'application/x-www-form-urlencoded'} if method.upper() == 'POST' else {}
         
-        # Parse provided headers
         if headers:
             header_list = headers.split(';')
             for header_str in header_list:
@@ -189,8 +187,8 @@ FCKR – The Ultimate Brute Forcer - A tool for brute-forcing HTTP requests with
 Usage: fckr <options>
 
 Options:
-  -H, --header <headers>  HTTP headers as a semicolon-separated string (e.g., "Cookie:JSESSIONID=abc123;Content-Type:application/json")
   -h, --help              Show this help message and exit
+  -H, --header <headers>  HTTP headers as a semicolon-separated string (e.g., "Cookie:JSESSIONID=abc123;Content-Type:application/json")
   -u, --url <url>         Target URL with FCK placeholder (e.g., https://example.com/?q=FCK) (required)
   -b, --body <body>       POST body with FCK placeholder (e.g., searchFor=FCK&goButton=go)
   -w, --wordlist <file>   Path to wordlist file (required)
@@ -234,8 +232,34 @@ Notes:
     console.print(help_text)
     sys.exit(0)
 
+def validate_arguments(args: dict):
+    """Validate required command-line arguments."""
+    if not args['url']:
+        console.print("[red]Error: -u/--url is required.[/red]")
+        sys.exit(1)
+    if not args['wordlist']:
+        console.print("[red]Error: -w/--wordlist is required.[/red]")
+        sys.exit(1)
+    if args['method'].upper() == 'POST' and not args['body']:
+        console.print("[red]Error: -b/--body is required for POST requests.[/red]")
+        sys.exit(1)
+    if args['method'].upper() == 'GET' and args['body']:
+        console.print("[red]Error: -b/--body is not allowed for GET requests.[/red]")
+        sys.exit(1)
+    
+    if args['method'].upper() == 'GET' and 'FCK' not in args['url']:
+        console.print("[red]Error: URL must contain 'FCK' placeholder for GET requests.[/red]")
+        sys.exit(1)
+    if args['method'].upper() == 'POST' and args['body'] and 'FCK' not in args['body']:
+        console.print("[red]Error: Body must contain 'FCK' placeholder for POST requests.[/red]")
+        sys.exit(1)
+
 def parse_arguments() -> dict:
     """Parse command-line arguments manually."""
+    # Check for -h or --help first to ensure it takes precedence
+    if '-h' in sys.argv or '--help' in sys.argv:
+        print_help()
+    
     args = {
         'url': None,
         'body': None,
@@ -257,8 +281,6 @@ def parse_arguments() -> dict:
             i += 1
             if i < len(sys.argv):
                 args['headers'] = sys.argv[i]
-        elif arg == ('-h','--help'):
-            print_help()
         elif arg in ('-u', '--url'):
             i += 1
             if i < len(sys.argv):
@@ -310,27 +332,8 @@ def parse_arguments() -> dict:
             sys.exit(1)
         i += 1
     
-    # Validate required arguments
-    if not args['url']:
-        console.print("[red]Error: -u/--url is required.[/red]")
-        sys.exit(1)
-    if not args['wordlist']:
-        console.print("[red]Error: -w/--wordlist is required.[/red]")
-        sys.exit(1)
-    if args['method'].upper() == 'POST' and not args['body']:
-        console.print("[red]Error: -b/--body is required for POST requests.[/red]")
-        sys.exit(1)
-    if args['method'].upper() == 'GET' and args['body']:
-        console.print("[red]Error: -b/--body is not allowed for GET requests.[/red]")
-        sys.exit(1)
-    
-    # Check for FCK in URL (GET) or body (POST)
-    if args['method'].upper() == 'GET' and 'FCK' not in args['url']:
-        console.print("[red]Error: URL must contain 'FCK' placeholder for GET requests.[/red]")
-        sys.exit(1)
-    if args['method'].upper() == 'POST' and args['body'] and 'FCK' not in args['body']:
-        console.print("[red]Error: Body must contain 'FCK' placeholder for POST requests.[/red]")
-        sys.exit(1)
+    # Validate arguments only if not requesting help
+    validate_arguments(args)
     
     return args
 
