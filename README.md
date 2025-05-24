@@ -69,10 +69,10 @@ fckr -u "<url_with_FCK>" -w <wordlist> [options]
 
 ### Common Flags
 
-| Short | Long               | Description                                      | Required | Default |
-| ----- | ------------------ | ------------------------------------------------ | -------- | ------- |
+| Short | Long               | Description                                      | Required  | Default |
+| ----- | ------------------ | ------------------------------------------------ | --------- | ------- |
 | `-u`  | `--url`            | Target URL with `FCK` placeholder                | ✅        | -       |
-| `-b`  | `--body`           | POST body with `FCK` (use with POST only)        | 🟡       | -       |
+| `-b`  | `--body`           | POST body with `FCK` (use with POST only)        | 🟡        | -       |
 | `-w`  | `--wordlist`       | Path to wordlist                                 | ✅        | -       |
 | `-m`  | `--method`         | HTTP method (`GET` or `POST`)                    | ❌        | GET     |
 | `-t`  | `--timeout`        | Timeout in seconds                               | ❌        | 5.0     |
@@ -80,6 +80,7 @@ fckr -u "<url_with_FCK>" -w <wordlist> [options]
 | `-o`  | `--output-filter`  | Control output display with same format          | ❌        | -       |
 | `-r`  | `--fetch-response` | Fetch full HTML for a specific word              | ❌        | -       |
 | `-d`  | `--debug`          | Show request and filter logs                     | ❌        | False   |
+| `-T`  | `--threads`        | Number of concurrent threads                     | ❌        | 10      |
 
 ---
 
