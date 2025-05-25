@@ -4,7 +4,7 @@ import time
 from typing import List, Tuple, Optional, Dict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
-from urllib.parse import parse_qs, urlencode
+from urllib.parse import parse_qs, urlencode, quote
 from rich.console import Console
 from rich.progress import Progress, BarColumn, TextColumn, TimeElapsedColumn
 from rich.text import Text
@@ -79,8 +79,10 @@ def load_wordlist(wordlist_path: str) -> List[str]:
         console.print(f"[red]Error reading wordlist: {e}[/red]")
         sys.exit(1)
 
-def prepare_request(url: str, body: Optional[str], word: str, method: str) -> Tuple[str, Optional[Dict[str, str]]]:
+def prepare_request(url: str, body: Optional[str], word: str, method: str, encode: bool = False) -> Tuple[str, Optional[Dict[str, str]]]:
     """Prepare the request URL and data by replacing FCK with the word."""
+    if encode:
+        word = quote(word)
     full_url = url.replace('FCK', word)
     data = None
     if method.upper() == 'POST' and body:
@@ -156,6 +158,12 @@ def matches_filter(response: dict, filter_type: str, filter_value: str, field: s
         return normalized_filter.lower() not in normalized_value.lower()
     return False
 
+def check_xss_reflection(response_text: str, payload: str, encode: bool = False) -> bool:
+    """Check if the exact payload is reflected in the response HTML."""
+    if encode:
+        payload = quote(payload)
+    return payload in response_text
+
 def parse_filters(filter_args: List[str]) -> List[dict]:
     """Parse filter arguments into a list of filter dictionaries."""
     filters = []
@@ -182,63 +190,72 @@ def signal_handler(sig, frame):
 def print_help():
     """Print help message and exit."""
     help_text = """
-FCKR – The Ultimate Brute Forcer - A tool for brute-forcing HTTP requests with customizable filters.
+FCKR – The Ultimate Brute Forcer - A tool for brute-forcing HTTP requests or testing XSS payload reflection.
 
-Usage: fckr <options>
+Usage: fckr <mode> <options>
 
-Options:
+Modes:
+  brute                  Perform brute-forcing with customizable filters
+  xss                    Test for exact XSS payload reflection in response HTML
+
+Options for 'brute' mode:
   -h, --help              Show this help message and exit
   -H, --header <headers>  HTTP headers as a semicolon-separated string (e.g., "Cookie:JSESSIONID=abc123;Content-Type:application/json")
   -u, --url <url>         Target URL with FCK placeholder (e.g., https://example.com/?q=FCK) (required)
   -b, --body <body>       POST body with FCK placeholder (e.g., searchFor=FCK&goButton=go)
-  -w, --wordlist <file>   Path to wordlist file (required)
+  -w, --wordlist <file>   Path to wordlist file (required unless -r is used)
   -m, --method <GET|POST> HTTP method (default: GET)
   -t, --timeout <seconds> Request timeout in seconds (default: 5.0)
   -o, --output <file>     Save results to a file (e.g., result.txt)
   -f, --filter <filter>   Filter which responses are displayed.
-                          If no -f filters are provided, all responses that pass filters are displayed. Use -f filters
-                          to narrow down the output to specific results of interest, such as successful responses, responses
-                          with specific content, or responses meeting certain criteria
-                          Multiple -f filters can be specified, and a response is displayed if it matches any one of them.
                           Format: <s|l|c>:<e|c|nc>:<value>
                           Fields:
                             - s: Status code (e.g., 200, 404)
                             - l: Content length (e.g., 1234)
                             - c: Response body content (e.g., success, <title>Login</title>)
                           Types:
-                            - e: Exact match (e.g., status code or length must match exactly)
+                            - e: Exact match
                             - c: Contains match (case-insensitive, HTML attributes normalized)
                             - nc: Not contains match (case-insensitive, HTML attributes normalized)
                           Examples:
-                            - s:e:200 (display responses with status code exactly 200)
-                            - c:c:success (display responses containing 'success' in the body)
-                            - c:nc:error (display responses not containing 'error' in the body)
-                            - l:e:1000 (display responses with content length exactly 1000)
-                            - c:c:'<h2 class=lead>results</h2>' (display responses with specific HTML)
-                            - s:c:20 (display responses with status codes starting with '20', e.g., 200, 201)
-                            - l:c:100 (display responses with content length containing '100', e.g., 100, 1000)
-  -r, --fetch-response <word> Fetch full HTML response for a specific word
-  -d, --debug                 Enable debug mode to log requests and filter mismatches
-  -T, --threads <number>      Number of concurrent threads (default: 10)
+                            - s:e:200
+                            - c:c:success
+                            - c:nc:error
+  -r, --fetch-response <word> Fetch full HTML response for a specific word (can be any string)
+  -d, --debug             Enable debug mode to log requests and filter mismatches
+  -T, --threads <number>  Number of concurrent threads (default: 10)
+
+Options for 'xss' mode:
+  -h, --help              Show this help message and exit
+  -H, --header <headers>  HTTP headers as a semicolon-separated string
+  -u, --url <url>         Target URL with FCK placeholder for GET requests (e.g., https://example.com/?q=FCK) (required)
+  -b, --body <body>       POST body with FCK placeholder for POST requests (e.g., search=FCK)
+  -w, --wordlist <file>   Path to wordlist file with XSS payloads (required unless -r is used)
+  -m, --method <GET|POST> HTTP method (default: GET)
+  -t, --timeout <seconds> Request timeout in seconds (default: 5.0)
+  -o, --output <file>     Save results to a file (e.g., result.txt)
+  -r, --fetch-response <word> Fetch full HTML response for a specific payload (can be any string)
+  -d, --debug             Enable debug mode to log requests
+  -T, --threads <number>  Number of concurrent threads (default: 10)
+  --encode                URL-encode payloads before sending
 
 Notes:
-  - Use -u to specify the target URL.
-  - Use -b to specify the POST body for POST requests.
-  - Either -u alone (for GET) or -u with -b (for POST) must be provided.
-  - URL must contain 'FCK' for GET requests; body must contain 'FCK' for POST requests.
+  - In 'brute' mode, use 'FCK' in the URL for GET requests or in the body for POST requests for word replacement.
+  - In 'xss' mode, use 'FCK' in the URL for GET requests or in the body for POST requests to indicate where payloads are inserted; checks for exact payload reflection in the response HTML.
   - Use -o or --output to save results to a file.
   - Use -H or --header to include custom headers like cookies or content-type, separated by semicolons.
+  - The -r/--fetch-response option can be used with any string, not limited to the wordlist.
     """
     console.print(help_text)
     sys.exit(0)
 
-def validate_arguments(args: dict):
+def validate_arguments(args: dict, mode: str):
     """Validate required command-line arguments."""
     if not args['url']:
         console.print("[red]Error: -u/--url is required.[/red]")
         sys.exit(1)
-    if not args['wordlist']:
-        console.print("[red]Error: -w/--wordlist is required.[/red]")
+    if not args['wordlist'] and not args['fetch_response']:
+        console.print("[red]Error: -w/--wordlist is required unless -r/--fetch-response is used.[/red]")
         sys.exit(1)
     if args['method'].upper() == 'POST' and not args['body']:
         console.print("[red]Error: -b/--body is required for POST requests.[/red]")
@@ -254,11 +271,15 @@ def validate_arguments(args: dict):
         console.print("[red]Error: Body must contain 'FCK' placeholder for POST requests.[/red]")
         sys.exit(1)
 
-def parse_arguments() -> dict:
+def parse_arguments() -> Tuple[str, dict]:
     """Parse command-line arguments manually."""
-    # Check for -h or --help first to ensure it takes precedence
-    if '-h' in sys.argv or '--help' in sys.argv:
+    if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
         print_help()
+    
+    mode = sys.argv[1].lower()
+    if mode not in ('brute', 'xss'):
+        console.print(f"[red]Error: Invalid mode '{mode}'. Use 'brute' or 'xss'.[/red]")
+        sys.exit(1)
     
     args = {
         'url': None,
@@ -271,10 +292,11 @@ def parse_arguments() -> dict:
         'debug': False,
         'threads': 10,
         'output': None,
-        'headers': None
+        'headers': None,
+        'encode': False
     }
     
-    i = 1
+    i = 2
     while i < len(sys.argv):
         arg = sys.argv[i]
         if arg in ('-H', '--header'):
@@ -305,7 +327,7 @@ def parse_arguments() -> dict:
                 except ValueError:
                     console.print(f"[red]Error: Invalid timeout value '{sys.argv[i]}'. Must be a number.[/red]")
                     sys.exit(1)
-        elif arg in ('-f', '--filter'):
+        elif arg in ('-f', '--filter') and mode == 'brute':
             i += 1
             if i < len(sys.argv):
                 args['output_filter'].append(sys.argv[i])
@@ -327,18 +349,18 @@ def parse_arguments() -> dict:
             i += 1
             if i < len(sys.argv):
                 args['output'] = sys.argv[i]
+        elif arg == '--encode' and mode == 'xss':
+            args['encode'] = True
         else:
-            console.print(f"[red]Unknown argument: {arg}[/red]")
+            console.print(f"[red]Unknown or invalid argument for {mode} mode: {arg}[/red]")
             sys.exit(1)
         i += 1
     
-    # Validate arguments only if not requesting help
-    validate_arguments(args)
-    
-    return args
+    validate_arguments(args, mode)
+    return mode, args
 
-def process_word(word: str, args: dict, output_filters: List[dict]) -> Tuple[str, Optional[dict]]:
-    """Process a single word: make request, apply filters, and return result."""
+def process_brute_word(word: str, args: dict, output_filters: List[dict]) -> Tuple[str, Optional[dict]]:
+    """Process a single word in brute mode: make request, apply filters, and return result."""
     url, data = prepare_request(args['url'], args['body'], word, args['method'])
     response = make_request(url, args['method'], data, args['timeout'], args['debug'], args['headers'])
     
@@ -354,28 +376,45 @@ def process_word(word: str, args: dict, output_filters: List[dict]) -> Tuple[str
     
     return word, None
 
+def process_xss_word(word: str, args: dict) -> Tuple[str, Optional[dict]]:
+    """Process a single word in XSS mode: check for exact payload reflection."""
+    url, data = prepare_request(args['url'], args['body'], word, args['method'], args['encode'])
+    response = make_request(url, args['method'], data, args['timeout'], args['debug'], args['headers'])
+    
+    if check_xss_reflection(response['c'], word, args['encode']):
+        return word, response
+    elif args['debug']:
+        console.print(f"[yellow]Debug: Payload '{word}' not reflected in response.[/yellow]")
+    
+    return word, None
+
 def main():
     signal.signal(signal.SIGINT, signal_handler)
     
-    args = parse_arguments()
+    mode, args = parse_arguments()
     
     display_animated_logo()
     console.print("-" * 80)
 
-    words = load_wordlist(args['wordlist'])
-    output_filters = parse_filters(args['output_filter'])
-
-    console.print(f"[bold]Starting brute force with {len(words)} words...[/bold]")
+    words = []
+    if args['wordlist']:
+        words = load_wordlist(args['wordlist'])
+    
+    console.print(f"[bold]Starting {mode} mode{' with ' + str(len(words)) + ' payloads' if words else ''}...[/bold]")
     console.print(f"[bold]Method:[/bold] {args['method']}")
     console.print(f"[bold]Target:[/bold] {args['url'].replace('FCK', '<word>')}")
     if args['body']:
         console.print(f"[bold]Body:[/bold] {args['body'].replace('FCK', '<word>')}")
     if args['headers']:
         console.print(f"[bold]Headers:[/bold] {args['headers']}")
-    console.print(f"[bold]Output Filters:[/bold] {output_filters}")
+    if mode == 'brute':
+        output_filters = parse_filters(args['output_filter'])
+        console.print(f"[bold]Output Filters:[/bold] {output_filters}")
+    if args['encode']:
+        console.print(f"[bold]Encoding:[/bold] URL-encode payloads")
     console.print(f"[bold]Threads:[/bold] {args['threads']}")
     if args['fetch_response']:
-        console.print(f"[bold]Fetching response for word:[/bold] {args['fetch_response']}")
+        console.print(f"[bold]Fetching response for:[/bold] {args['fetch_response']}")
     if args['output']:
         console.print(f"[bold]Output File:[/bold] {args['output']}")
     console.print("-" * 80)
@@ -389,12 +428,7 @@ def main():
             sys.exit(1)
 
     if args['fetch_response']:
-        if args['fetch_response'] not in words:
-            console.print(f"[red]Error: Word '{args['fetch_response']}' not in wordlist.[/red]")
-            if output_file:
-                output_file.close()
-            sys.exit(1)
-        url, data = prepare_request(args['url'], args['body'], args['fetch_response'], args['method'])
+        url, data = prepare_request(args['url'], args['body'], args['fetch_response'], args['method'], args['encode'] if mode == 'xss' else False)
         response = make_request(url, args['method'], data, args['timeout'], args['debug'], args['headers'])
         console.print(f"[bold cyan]HTML Response for '{args['fetch_response']}':[/bold cyan]")
         console.print(response['c'])
@@ -403,13 +437,19 @@ def main():
         if response.get('error'):
             console.print(f"[red]Error: {response['error']}[/red]")
         if output_file:
-            output_file.write(f"Word: {args['fetch_response']} | Status: {response['s']} | Length: {response['l']} | Time: {response['t']:.2f}s")
+            output_file.write(f"{'Word' if mode == 'brute' else 'Payload'}: {args['fetch_response']} | Status: {response['s']} | Length: {response['l']} | Time: {response['t']:.2f}s")
             if response.get('error'):
                 output_file.write(f" | Error: {response['error']}")
             output_file.write("\n")
             output_file.write(f"Response:\n{response['c']}\n{'-' * 80}\n")
             output_file.close()
         return
+
+    if not words:
+        console.print("[red]Error: No wordlist provided and -r/--fetch-response not used.[/red]")
+        if output_file:
+            output_file.close()
+        sys.exit(1)
 
     matches_found = False
     progress = Progress(
@@ -429,29 +469,35 @@ def main():
         with Live(progress, console=console, transient=True):
             task = progress.add_task("Working...", total=len(words))
             with ThreadPoolExecutor(max_workers=args['threads']) as executor:
-                future_to_word = {
-                    executor.submit(process_word, word, args, output_filters): word
-                    for word in words
-                }
+                if mode == 'brute':
+                    future_to_word = {
+                        executor.submit(process_brute_word, word, args, output_filters): word
+                        for word in words
+                    }
+                else:  # xss mode
+                    future_to_word = {
+                        executor.submit(process_xss_word, word, args): word
+                        for word in words
+                    }
                 for future in as_completed(future_to_word):
                     word, response = future.result()
                     progress.advance(task)
                     if response:
                         matches_found = True
                         error = f" | Error: {response['error']}" if response.get('error') else ""
-                        result_line = f"Word: {word} | Status: {response['s']} | Length: {response['l']} | Time: {response['t']:.2f}s{error}"
+                        result_line = f"{'Word' if mode == 'brute' else 'Payload'}: {word} | Status: {response['s']} | Length: {response['l']} | Time: {response['t']:.2f}s{error}"
                         console.print(f"[bold]{result_line}[/bold]")
                         if output_file:
                             output_file.write(result_line + "\n")
                     time.sleep(0.01)
         
         if matches_found:
-            console.print("[bold magenta]💀 Brute Force Complete! All words processed successfully! 💀[/bold magenta]")
+            console.print(f"[bold magenta]💀 {mode.capitalize()} Mode Complete! All payloads processed successfully! 💀[/bold magenta]")
         else:
-            console.print("[bold yellow]⚠ Brute Force Complete! No matches found. Check filters or use -r to inspect HTML. ⚠[/bold yellow]")
+            console.print(f"[bold yellow]⚠ {mode.capitalize()} Mode Complete! No matches found. Check {'filters' if mode == 'brute' else 'payload reflection'} or use -r to inspect HTML. ⚠[/bold yellow]")
         
         if args['debug'] and not matches_found:
-            console.print("[yellow]Debug: No responses matched the output filters. Try inspecting HTML with -r or adjusting the filter.[/yellow]")
+            console.print(f"[yellow]Debug: No responses matched the {'output filters' if mode == 'brute' else 'payload reflection criteria'}. Try inspecting HTML with -r or adjusting the {'filter' if mode == 'brute' else 'payloads'}.[/yellow]")
     
     except KeyboardInterrupt:
         console.print("\n[red bold]Process stopped by user.[/red bold]")
