@@ -1,65 +1,128 @@
-# FCKR – The Ultimate Brute Forcer
+# FCKR – The Ultimate Brute-Forcer
 
-**FCKR** is a command-line tool designed for **security researchers** and **penetration testers** to perform HTTP brute-forcing or test XSS payload reflection. It supports two modes: `brute` for replacing placeholders in URLs, POST bodies, or raw request parameters with wordlist entries, and `xss` for checking exact payload reflection in response HTML. Traditional mode uses `FCK` placeholders in URLs (for GET) or bodies (for POST). Advanced mode loads full raw HTTP requests from files and fuzzes specific parameters, supporting JSON, form-urlencoded, and other formats.
+**FCKR** is a powerful CLI tool for **penetration testers** and **security researchers** that performs:
 
-> ✨ Developed by **[@IMApurbo](https://github.com/imapurbo)**  
-> 🛡️ Use responsibly. Authorized testing only.
+* **HTTP brute forcing** (placeholder replacement & parameter fuzzing)
+* **XSS reflection testing** (exact payload match detection)
+
+Supports both:
+
+* **Traditional mode** using `FCK` placeholder
+* **Raw request mode** using full HTTP request files
+
+> Developed by **[@IMApurbo](https://github.com/imapurbo)**
+> ⚠️ *Use responsibly. Authorized testing only.*
 
 ---
 
 ## 🚀 Features
 
-- **Dual Modes**
-  - `brute`: Replace placeholders in URLs, POST bodies, or request parameters with wordlist entries for brute-forcing.
-  - `xss`: Test XSS payloads for exact reflection in response HTML, replacing placeholders or parameters.
-- **HTTP Method Support**
-  - Supports `GET`, `POST`, and other methods via raw request files.
-  - Traditional: `FCK` required in URLs (GET) or bodies (POST).
-  - Raw files: Auto-detects method from file.
-- **Raw Request File Support (-R)**
-  - Load full HTTP requests from raw files (method, URL, headers, body).
-  - Fuzz specific parameters (-p) in query strings, form data, or JSON bodies.
-  - Handles JSON (replaces key values), form-urlencoded, and fallbacks to string replacement for other formats.
-- **Advanced Filtering (brute mode)**
-  - **Response Filters (-f)**: Filter based on:
-    - `s`: status code
-    - `l`: content length
-    - `c`: response body
-  - Filter types:
-    - `e`: exact match
-    - `c`: contains
-    - `nc`: not contains
-- **XSS Reflection Checking (xss mode)**
-  - Detects exact payload reflection in response HTML, with optional URL encoding (`--encode`).
-- **Response Inspection (-r)**
-  - Fetch full HTML responses for any specific word or payload in both modes.
-- **Output Saving (-o)**
-  - Save results to a file (e.g., `result.txt`).
-- **Custom Headers (-H)**
-  - Add/override HTTP headers as a semicolon-separated string (e.g., `Cookie:JSESSIONID=abc123;Content-Type:application/json`).
-- **Debug Mode (-d)**
-  - Logs all requests and mismatched filters (brute mode) or non-reflected payloads (xss mode).
-- **Threading (-T)**
-  - Speed up operations with concurrent threads (default: 10).
-- **Progress Bar**
-  - Stylish visual feedback during operations.
-- **User-Friendly Output**
-  - Concise results like:  
-    `Word: <word> | Status: <status> | Length: <length> | Time: <time>s` (brute mode)  
-    `Payload: <payload> | Status: <status> | Length: <length> | Time: <time>s` (xss mode)
+### 🔹 Dual Modes
+
+* **brute** — wordlist-based brute forcing
+* **xss** — reflected XSS detection
+
+### 🔹 Traditional Mode
+
+Place `FCK` in:
+
+* URL (GET fuzzing)
+* Body (POST fuzzing)
+
+Each wordlist entry replaces `FCK`.
+
+### 🔹 Raw Request Mode (`-R`)
+
+Supports full HTTP request files:
+
+```
+POST /login HTTP/1.1
+Host: example.com
+Content-Type: application/json
+
+{"user":"admin","pass":"FCK"}
+```
+
+Raw mode features include:
+
+* Auto-extract method, URL, headers, and body
+* Parameter-specific fuzzing (`-p param`)
+* FCK placeholder substitution when `-p` is not used
+* JSON, form, query, and fallback raw-body fuzzing
+
+**Real behaviors matched to your code:**
+
+* JSON → parsed/replaced as dict
+* Form data → parsed with `parse_qs()`
+* Unknown content-type → fallback string replace
+* Missing parameter → *warning printed*
+
+### 🔹 Parameter-Specific Fuzzing (`-p`)
+
+Fuzzes:
+
+* Query parameters
+* JSON keys
+* Form-encoded fields
+
+Missing key → warning.
+
+### 🔹 URL Encoding Support (`--encode`)
+
+Payloads encoded using `quote()`.
+
+### 🔹 Header Merging (`-H`)
+
+Headers added using this format:
+
+```
+Header1:Value;Header2:Value
+```
+
+Invalid format → warning.
+
+### 🔹 Filtering (`-f`)
+
+Supports:
+
+| Field | Meaning        |
+| ----- | -------------- |
+| `s`   | status code    |
+| `l`   | content length |
+| `c`   | body content   |
+
+Types:
+
+* `e` → exact
+* `c` → contains
+* `nc` → not contains
+
+### 🔹 Debug Mode (`-d`)
+
+Displays:
+
+* Requests sent
+* Filter mismatches
+* Non-reflected XSS payloads
+
+### 🔹 Threading (`-T`)
+
+Uses ThreadPoolExecutor
+Default: **10 threads**
+
+### 🔹 Fetch Raw Response (`-r`)
+
+Fetch raw HTML for a specific word/payload.
+
 
 ---
 
-## 🧪 Installation
+## 📦 Installation
 
-Install directly from PyPI:
 ```bash
 pip install fckr
 ```
 
-### Requirements
-- Python 3.6+
-- Terminal with ANSI support (Linux, macOS, or Windows Terminal)
 ---
 
 ## ⚙️ Usage
@@ -69,177 +132,161 @@ fckr <mode> <options>
 ```
 
 ### Modes
-- `brute`: Perform traditional brute-forcing with wordlist and filters.
-- `xss`: Test XSS payloads for exact reflection in response HTML.
 
-### Common Flags
-
-| Short | Long          | Description                                                                 | Required | Default | Modes     |
-|-------|---------------|-----------------------------------------------------------------------------|----------|---------|-----------|
-| `-u`  | `--url`       | Target URL with `FCK` placeholder (e.g., `https://example.com/?q=FCK`)      | 🟡       | -       | brute, xss |
-| `-b`  | `--body`      | POST body with `FCK` (required for POST)                                    | 🟡       | -       | brute, xss |
-| `-w`  | `--wordlist`  | Path to wordlist file                                                       | 🟡       | -       | brute, xss |
-| `-m`  | `--method`    | HTTP method (`GET` or `POST`) (ignored with `-R`)                           | ❌       | GET     | brute, xss |
-| `-t`  | `--timeout`   | Timeout in seconds                                                          | ❌       | 5.0     | brute, xss |
-| `-f`  | `--filter`    | Filter response (e.g., `s:e:200`, `c:c:success`)                            | ❌       | -       | brute     |
-| `-o`  | `--output`    | Save results to a file (e.g., `result.txt`)                                 | ❌       | -       | brute, xss |
-| `-r`  | `--fetch-response` | Fetch full HTML for a specific word/payload (any string)              | ❌       | -       | brute, xss |
-| `-d`  | `--debug`     | Show request and filter/payload logs                                        | ❌       | False   | brute, xss |
-| `-H`  | `--header`    | HTTP headers (semicolon-separated)                                          | ❌       | -       | brute, xss |
-| `-T`  | `--threads`   | Number of concurrent threads                                                | ❌       | 10      | brute, xss |
-|       | `--encode`    | URL-encode payloads before sending                                          | ❌       | False   | xss       |
-| `-R`  | `--request`   | Load raw HTTP request file (method, URL, headers, body)                     | ❌       | -       | brute, xss |
-| `-p`  | `--param`     | Parameter name to fuzz (required with `-R`)                                 | 🟡       | -       | brute, xss |
-| `-h`  | `--help`      | Show this help message and exit                                             | ❌       | -       | brute, xss |
-
-> **Notes**:
-> - `-w/--wordlist` is required unless `-r/--fetch-response` is used.
-> - Traditional mode: `FCK` required in URL (GET) or body (POST).
-> - Raw mode (`-R`): Ignores `-u`, `-b`, `-m`; `-p` required. Supports JSON/form/other formats.
-> - `-b/--body` required for POST (traditional) and not allowed for GET.
-> - Multiple `-f` flags allowed for combined filters.
+| Mode  | Description            |
+| ----- | ---------------------- |
+| brute | Wordlist brute forcing |
+| xss   | XSS reflection testing |
 
 ---
 
-## 🔍 Filtering Syntax (brute mode only)
+## 🧰 Options
 
-Format:
+### Common Options
+
+| Option                   | Description                |
+| ------------------------ | -------------------------- |
+| `-u`, `--url`            | URL containing `FCK`       |
+| `-b`, `--body`           | POST body containing `FCK` |
+| `-w`, `--wordlist`       | Wordlist file              |
+| `-m`, `--method`         | GET/POST                   |
+| `-H`, `--header`         | Extra headers              |
+| `-t`, `--timeout`        | Timeout (seconds)          |
+| `-T`, `--threads`        | Thread count               |
+| `-d`, `--debug`          | Debug mode                 |
+| `-o`, `--output`         | Save results to file       |
+| `-r`, `--fetch-response` | Fetch full raw HTML        |
+| `--encode`               | URL-encode payloads        |
+
+### Raw Request Options
+
+| Option | Description                          |
+| ------ | ------------------------------------ |
+| `-R`   | HTTP raw request file                |
+| `-p`   | Fuzz specific parameter (query/json) |
+
+### Notes (matches your code exactly)
+
+* `-u` **or** `-R` required
+* In **raw mode**:
+
+  * `-u`, `-b`, `-m` → **ignored**
+  * If no `-p` → FCK replacement used
+* JSON/form/query all supported
+* Unknown content-type → fallback string replace
+* Missing parameter → warning shown
+
+---
+
+## 🔍 Filter Syntax
+
 ```
 <field>:<type>:<value>
 ```
 
-### Fields
-- `s`: HTTP status code
-- `l`: Content length
-- `c`: Response body content
+Examples:
 
-### Types
-- `e`: Exact match
-- `c`: Contains (case-insensitive, HTML attributes normalized)
-- `nc`: Not contains (case-insensitive, HTML attributes normalized)
-
-### Examples
 ```bash
--f s:e:200                # Show only 200 OK
--f c:nc:error             # Show results without "error"
--f 'c:c:signup here'      # Show responses containing "signup here" (quote multi-word values)
--f l:e:1000               # Show only 1000-byte responses
+-f s:e:200
+-f c:nc:error
+-f c:c:"success"
+-f l:e:1024
 ```
 
 ---
 
 ## 🔧 Examples
 
-### Brute Mode
+### 1️⃣ Simple GET Brute
 
-**Brute-force with GET (traditional):**
 ```bash
-fckr brute -u "https://test.com/search?q=FCK" -w list.txt -m GET
+fckr brute -u "https://test.com/?id=FCK" -w ids.txt
 ```
 
-**POST request with body (traditional):**
+### 2️⃣ POST Brute
+
 ```bash
-fckr brute -u "http://test.com/search" -b "query=FCK&submit=1" -w list.txt -m POST
+fckr brute -u "https://test.com/login" -b "user=admin&pass=FCK" -w pass.txt
 ```
 
-**Filter by content (traditional):**
+### 3️⃣ Raw Request Placeholder (FCK)
+
 ```bash
-fckr brute -u "https://test.com/?q=FCK" -w list.txt -f c:nc:'"<h2>Not found</h2>"'
+fckr brute -R req.txt -w list.txt
 ```
 
-**Brute-force using raw request file (JSON POST):**
-```bash
-# req.txt example:
-# POST /api/login HTTP/1.1
-# Host: test.com
-# Content-Type: application/json
-#
-# {"username":"admin","password":"FCK"}
+### 4️⃣ Raw Request + Parameter Fuzzing
 
-fckr brute -R req.txt -p password -w list.txt
+```bash
+fckr brute -R req.txt -p password -w pass.txt
 ```
 
-**Filter with raw request (form-urlencoded):**
+### 5️⃣ Fetch Full Response
+
 ```bash
-fckr brute -R req.txt -p pass -w list.txt -f c:nc:'signup here'
+fckr brute -u "https://a.com/?q=FCK" -w list.txt -r admin
 ```
 
-**Inspect full response for a word:**
+### 6️⃣ XSS Reflection Test
+
 ```bash
-fckr brute -u "https://test.com/?q=FCK" -w list.txt -r "admin"
-# Or with raw: fckr brute -R req.txt -p pass -r "secret"
+fckr xss -u "https://test.com/?q=FCK" -w payloads.txt --encode
 ```
 
-### XSS Mode
+### 7️⃣ Raw JSON XSS
 
-**Test XSS payloads with GET (traditional):**
 ```bash
-fckr xss -u "https://test.com/search?q=FCK" -w payloads.txt -m GET --encode
-```
-
-**Test XSS payloads with POST (traditional):**
-```bash
-fckr xss -u "http://test.com/search" -b "query=FCK&submit=1" -w payloads.txt -m POST
-```
-
-**Test XSS with raw request file (JSON):**
-```bash
-fckr xss -R req.txt -p input -w payloads.txt --encode
-```
-
-**Inspect full response for a payload:**
-```bash
-fckr xss -u "https://test.com/?q=FCK" -w payloads.txt -r "<script>alert('xss')</script>" --encode
-# Or with raw: fckr xss -R req.txt -p input -r "<img src=x onerror=alert(1)>"
-```
-
-**Verbose debugging:**
-```bash
-fckr xss -u "https://test.com/?q=FCK" -w payloads.txt -d
+fckr xss -R req.txt -p search -w payloads.txt
 ```
 
 ---
 
-## 📂 Wordlist Format
+## 📂 Wordlist Examples
 
-Plain text file, one word or payload per line:
+**Brute-force list:**
 
-**For brute mode:**
 ```
 admin
-test
-search
+test123
+root
 ```
 
-**For xss mode:**
+**XSS payload list:**
+
 ```
-<script>alert('xss')</script>
+<script>alert(1)</script>
 <img src=x onerror=alert(1)>
-test' onload='alert(1)'
 ```
 
 ---
 
-## 🛠️ Installation
+## 🛠 Development
 
 ```bash
-pip install fckr
-fckr brute -u "https://example.com/?q=FCK" -w list.txt
+git clone https://github.com/IMApurbo/fckr
+cd fckr
+pip install -r requirements.txt
+```
+
+Run:
+
+```bash
+python -m fckr brute -u "https://example.com/?q=FCK" -w list.txt
 ```
 
 ---
 
-## ⚠️ Legal Notice
+## ⚠️ Legal Disclaimer
 
-> 🛑 Use **only on systems you have explicit permission** to test.  
-> Misuse may violate laws and ethical guidelines.
+Use only with explicit permission.
+Unauthorized testing is illegal.
 
 ---
 
 ## ⭐ Credits
-- Developed by **IMApurbo**
+
+**Created by:** [IMApurbo](https://github.com/imapurbo)
 
 ---
-
 ## 📃 License
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
