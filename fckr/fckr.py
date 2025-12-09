@@ -112,8 +112,8 @@ def parse_request_file(file_path: str) -> Dict:
     except Exception as e:
         raise ValueError(f"Failed to parse request file: {e}")
 
-def prepare_fuzzed_request(req: Dict, word: str, param: str, encode: bool = False, extra_headers_str: Optional[str] = None) -> Tuple[str, Optional[Union[Dict, str]], Dict]:
-    """Prepare a fuzzed request by replacing the specified param value with word."""
+def prepare_fuzzed_request(req: Dict, word: str, param: Optional[str], encode: bool = False, extra_headers_str: Optional[str] = None) -> Tuple[str, Optional[Union[Dict, str]], Dict]:
+    """Prepare a fuzzed request by replacing the specified param value with word or 'FCK' placeholder."""
     method = req['method'].upper()
     headers = req['headers'].copy()
     if extra_headers_str:
@@ -128,66 +128,78 @@ def prepare_fuzzed_request(req: Dict, word: str, param: str, encode: bool = Fals
     url = req['url']
     post_data = None
     body = req['body']
-    if encode:
-        word = quote(word)
-    if method == 'GET':
-        parsed = urlparse(url)
-        query_params = parse_qs(parsed.query, keep_blank_values=True)
-        if param not in query_params:
-            console.print(f"[yellow]Warning: Param '{param}' not found in query string. Using original URL.[/yellow]")
+    fuzz_word = quote(word) if encode else word
+    if param is None:
+        # Use FCK placeholder replacement
+        if method == 'GET':
+            url = url.replace('FCK', fuzz_word)
+            return url, None, headers
         else:
-            query_params[param] = [word]
-            new_query = urlencode(query_params, doseq=True)
-            url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
-        return url, None, headers
-    else:  # POST/PUT/etc.
-        content_type = headers.get('Content-Type', '').lower()
-        if 'application/x-www-form-urlencoded' in content_type or not content_type:
-            try:
-                parsed_body = parse_qs(body, keep_blank_values=True) if body else {}
-                if param not in parsed_body:
-                    console.print(f"[yellow]Warning: Param '{param}' not found in form body. Using original body.[/yellow]")
-                else:
-                    parsed_body[param] = [word]
-                post_data = {k: v[0] for k, v in parsed_body.items()}
-                if 'Content-Type' not in headers:
-                    headers['Content-Type'] = 'application/x-www-form-urlencoded'
-                return url, post_data, headers
-            except Exception:
-                # Fallback to string replace
-                pattern = re.escape(param) + r'=[^&\s]*'
-                new_body = re.sub(pattern, f"{param}={word}", body, count=1)
-                if 'Content-Type' not in headers:
-                    headers['Content-Type'] = 'application/x-www-form-urlencoded'
-                return url, new_body, headers
-        elif 'application/json' in content_type:
-            try:
-                json_obj = json.loads(body) if body else {}
-                if not isinstance(json_obj, dict):
-                    raise ValueError("JSON body is not an object")
-                if param not in json_obj:
-                    console.print(f"[yellow]Warning: Param '{param}' not found in JSON body. Using original body.[/yellow]")
-                else:
-                    json_obj[param] = word
-                new_body = json.dumps(json_obj)
-                if 'Content-Type' not in headers:
-                    headers['Content-Type'] = 'application/json'
-                return url, new_body, headers
-            except Exception:
-                # Rough string replace for JSON
-                escaped_param = re.escape(f'"{param}"')
-                pattern = f'{escaped_param}:\\s*"[^"]*"'
-                replacement = f'{escaped_param}: "{word}"'
-                new_body = re.sub(pattern, replacement, body, count=1)
-                if 'Content-Type' not in headers:
-                    headers['Content-Type'] = 'application/json'
-                return url, new_body, headers
-        else:
-            # Fallback string replace for other formats
-            console.print(f"[yellow]Warning: Unknown Content-Type '{content_type}'. Using string replace in body.[/yellow]")
-            pattern = re.escape(param) + r'=[^&\s]*'
-            new_body = re.sub(pattern, f"{param}={word}", body, count=1)
+            # For other methods, replace in body string
+            new_body = body.replace('FCK', fuzz_word)
             return url, new_body, headers
+    else:
+        # Fuzz specific param
+        if encode:
+            fuzz_word = quote(word)
+        if method == 'GET':
+            parsed = urlparse(url)
+            query_params = parse_qs(parsed.query, keep_blank_values=True)
+            if param not in query_params:
+                console.print(f"[yellow]Warning: Param '{param}' not found in query string. Using original URL.[/yellow]")
+            else:
+                query_params[param] = [fuzz_word]
+                new_query = urlencode(query_params, doseq=True)
+                url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
+            return url, None, headers
+        else:  # POST/PUT/etc.
+            content_type = headers.get('Content-Type', '').lower()
+            if 'application/x-www-form-urlencoded' in content_type or not content_type:
+                try:
+                    parsed_body = parse_qs(body, keep_blank_values=True) if body else {}
+                    if param not in parsed_body:
+                        console.print(f"[yellow]Warning: Param '{param}' not found in form body. Using original body.[/yellow]")
+                    else:
+                        parsed_body[param] = [fuzz_word]
+                    post_data = {k: v[0] for k, v in parsed_body.items()}
+                    if 'Content-Type' not in headers:
+                        headers['Content-Type'] = 'application/x-www-form-urlencoded'
+                    return url, post_data, headers
+                except Exception:
+                    # Fallback to string replace
+                    pattern = re.escape(param) + r'=[^&\s]*'
+                    new_body = re.sub(pattern, f"{param}={fuzz_word}", body, count=1)
+                    if 'Content-Type' not in headers:
+                        headers['Content-Type'] = 'application/x-www-form-urlencoded'
+                    return url, new_body, headers
+            elif 'application/json' in content_type:
+                try:
+                    json_obj = json.loads(body) if body else {}
+                    if not isinstance(json_obj, dict):
+                        raise ValueError("JSON body is not an object")
+                    if param not in json_obj:
+                        console.print(f"[yellow]Warning: Param '{param}' not found in JSON body. Using original body.[/yellow]")
+                    else:
+                        json_obj[param] = fuzz_word
+                    new_body = json.dumps(json_obj)
+                    if 'Content-Type' not in headers:
+                        headers['Content-Type'] = 'application/json'
+                    return url, new_body, headers
+                except Exception:
+                    # Rough string replace for JSON
+                    escaped_param = re.escape(f'"{param}"')
+                    pattern = f'{escaped_param}:\\s*"[^"]*"'
+                    replacement = f'{escaped_param}: "{fuzz_word}"'
+                    new_body = re.sub(pattern, replacement, body, count=1)
+                    if 'Content-Type' not in headers:
+                        headers['Content-Type'] = 'application/json'
+                    return url, new_body, headers
+            else:
+                # Fallback string replace for other formats
+                console.print(f"[yellow]Warning: Unknown Content-Type '{content_type}'. Using string replace in body.[/yellow]")
+                pattern = re.escape(param) + r'=[^&\s]*'
+                new_body = re.sub(pattern, f"{param}={fuzz_word}", body, count=1)
+                return url, new_body, headers
     return url, post_data, headers
 
 def load_wordlist(wordlist_path: str) -> List[str]:
@@ -202,21 +214,51 @@ def load_wordlist(wordlist_path: str) -> List[str]:
         console.print(f"[red]Error reading wordlist: {e}[/red]")
         sys.exit(1)
 
-def prepare_request(url: str, body: Optional[str], word: str, method: str, encode: bool = False) -> Tuple[str, Optional[Dict[str, str]]]:
-    """Prepare the request URL and data by replacing FCK with the word."""
-    if encode:
-        word = quote(word)
-    full_url = url.replace('FCK', word)
-    data = None
-    if method.upper() == 'POST' and body:
-        body = body.replace('FCK', word)
-        try:
-            parsed_body = parse_qs(body, keep_blank_values=True)
-            data = {k: v[0] for k, v in parsed_body.items()}
-        except Exception as e:
-            console.print(f"[yellow]Warning: Failed to parse POST body for word '{word}': {e}. Using raw body.[/yellow]")
-            data = body
-    return full_url, data
+def prepare_request(url: str, body: Optional[str], word: str, method: str, param: Optional[str], encode: bool = False) -> Tuple[str, Optional[Union[Dict, str]]]:
+    """Prepare the request URL and data by fuzzing param or replacing FCK with the word."""
+    fuzz_word = quote(word) if encode else word
+    if param is None:
+        # FCK replacement
+        full_url = url.replace('FCK', fuzz_word)
+        data = None
+        if method.upper() == 'POST' and body:
+            body_replaced = body.replace('FCK', fuzz_word)
+            try:
+                parsed_body = parse_qs(body_replaced, keep_blank_values=True)
+                data = {k: v[0] for k, v in parsed_body.items()}
+            except Exception as e:
+                console.print(f"[yellow]Warning: Failed to parse POST body for word '{word}': {e}. Using raw body.[/yellow]")
+                data = body_replaced
+        return full_url, data
+    else:
+        # Fuzz specific param
+        if encode:
+            fuzz_word = quote(word)
+        if method.upper() == 'GET':
+            parsed = urlparse(url)
+            query_params = parse_qs(parsed.query, keep_blank_values=True)
+            if param not in query_params:
+                console.print(f"[yellow]Warning: Param '{param}' not found in query string. Using original URL.[/yellow]")
+            else:
+                query_params[param] = [fuzz_word]
+                new_query = urlencode(query_params, doseq=True)
+                full_url = urlunparse((parsed.scheme, parsed.netloc, parsed.path, parsed.params, new_query, parsed.fragment))
+            return full_url, None
+        else:
+            content_type = 'application/x-www-form-urlencoded'  # Assume for traditional
+            try:
+                parsed_body = parse_qs(body, keep_blank_values=True) if body else {}
+                if param not in parsed_body:
+                    console.print(f"[yellow]Warning: Param '{param}' not found in body. Using original body.[/yellow]")
+                else:
+                    parsed_body[param] = [fuzz_word]
+                data = {k: v[0] for k, v in parsed_body.items()}
+                return url, data
+            except Exception:
+                # Fallback string replace
+                pattern = re.escape(param) + r'=[^&\s]*'
+                new_body = re.sub(pattern, f"{param}={fuzz_word}", body, count=1)
+                return url, new_body
 
 def make_request(url: str, method: str, data: Optional[Union[Dict[str, str], str]], timeout: float, debug: bool, headers_input: Optional[Union[str, Dict[str, str]]] = None) -> dict:
     """Make an HTTP request and return response details."""
@@ -224,7 +266,7 @@ def make_request(url: str, method: str, data: Optional[Union[Dict[str, str], str
         start_time = time.time()
         request_headers = {}
         if isinstance(headers_input, str):
-            if method.upper() == 'POST':
+            if method.upper() != 'GET':
                 request_headers['Content-Type'] = 'application/x-www-form-urlencoded'
             if headers_input:
                 header_list = headers_input.split(';')
@@ -238,17 +280,14 @@ def make_request(url: str, method: str, data: Optional[Union[Dict[str, str], str
                             console.print(f"[yellow]Warning: Invalid header format '{header_str}'. Expected 'Key:Value'. Skipping.[/yellow]")
         elif isinstance(headers_input, dict):
             request_headers = headers_input.copy()
-        if method.upper() == 'POST' and 'Content-Type' not in request_headers:
+        if method.upper() != 'GET' and 'Content-Type' not in request_headers:
             request_headers['Content-Type'] = 'application/x-www-form-urlencoded'
        
         if debug:
             data_str = str(data) if data else 'no body'
             console.print(f"[yellow]Debug: Sending {method.upper()} to {url} with headers: {request_headers}, body: {data_str}[/yellow]")
        
-        if method.upper() == 'POST':
-            response = requests.post(url, data=data, timeout=timeout, headers=request_headers)
-        else:
-            response = requests.get(url, timeout=timeout, headers=request_headers)
+        response = requests.request(method.upper(), url, data=data, timeout=timeout, headers=request_headers)
        
         elapsed_time = time.time() - start_time
         return {
@@ -327,8 +366,8 @@ Modes:
   xss Test for exact XSS payload reflection in response HTML
 Options for both modes:
   -h, --help Show this help message and exit
-  -R, --request <file> Load HTTP request from raw file (first line: METHOD PATH VERSION, headers, empty line, body). Ignores -u/-b/-m.
-  -p, --param <name> Parameter name to fuzz (required with --request)
+  -R, --request <file> Load HTTP request from raw file (first line: METHOD PATH VERSION, headers, empty line, body). Ignores -u/-b/-m. Use -p to fuzz param or 'FCK' placeholder.
+  -p, --param <name> Parameter name to fuzz (optional; use with or without --request. If not used, requires 'FCK' placeholder)
   -H, --header <headers> HTTP headers as a semicolon-separated string (e.g., "Cookie:JSESSIONID=abc123;Content-Type:application/json"). Appends/overides file headers if --request used.
   -w, --wordlist <file> Path to wordlist file (required unless -r is used)
   -t, --timeout <seconds> Request timeout in seconds (default: 5.0)
@@ -337,8 +376,8 @@ Options for both modes:
   -d, --debug Enable debug mode to log requests and filter mismatches
   -T, --threads <number> Number of concurrent threads (default: 10)
 Options for 'brute' mode:
-  -u, --url <url> Target URL with FCK placeholder (e.g., https://example.com/?q=FCK) (required unless --request)
-  -b, --body <body> POST body with FCK placeholder (e.g., searchFor=FCK&goButton=go) (required for POST unless --request)
+  -u, --url <url> Target URL (required unless --request; use with -p or contain 'FCK')
+  -b, --body <body> POST body (required for POST unless --request; use with -p or contain 'FCK')
   -m, --method <GET|POST> HTTP method (default: GET) (ignored with --request)
   -f, --filter <filter> Filter which responses are displayed.
                           Format: <s|l|c>:<e|c|nc>:<value>
@@ -355,14 +394,13 @@ Options for 'brute' mode:
                             - c:c:success
                             - c:nc:error
 Options for 'xss' mode:
-  -u, --url <url> Target URL with FCK placeholder for GET requests (e.g., https://example.com/?q=FCK) (required unless --request)
-  -b, --body <body> POST body with FCK placeholder for POST requests (e.g., search=FCK) (required for POST unless --request)
+  -u, --url <url> Target URL (required unless --request; use with -p or contain 'FCK')
+  -b, --body <body> POST body (required for POST unless --request; use with -p or contain 'FCK')
   -m, --method <GET|POST> HTTP method (default: GET) (ignored with --request)
-  --encode URL-encode payloads before sending (supports JSON, form, etc. with --request)
+  --encode URL-encode payloads before sending (supports JSON, form, etc. with --request or -p)
 Notes:
-  - In 'brute' mode, use 'FCK' in the URL for GET requests or in the body for POST requests for word replacement (unless --request).
-  - In 'xss' mode, use 'FCK' in the URL for GET requests or in the body for POST requests to indicate where payloads are inserted; checks for exact payload reflection in the response HTML (unless --request).
-  - With --request, supports JSON (replaces key value), form-urlencoded, or other (string replace fallback). Ensure Content-Type in file for JSON.
+  - Fuzzing: Use -p <param> to target specific param in URL/body/request, or place 'FCK' where fuzzing should occur.
+  - With --request, supports JSON (replaces key value or 'FCK'), form-urlencoded, or other (string replace fallback). Ensure Content-Type in file for JSON.
   - Use -o or --output to save results to a file.
   - Use -H or --header to include custom headers like cookies or content-type, separated by semicolons.
   - The -r/--fetch-response option can be used with any string, not limited to the wordlist.
@@ -373,6 +411,7 @@ Notes:
 def validate_arguments(args: dict, mode: str):
     """Validate required command-line arguments."""
     using_request = bool(args['request_file'])
+    has_param = bool(args['param'])
     if not using_request:
         if not args['url']:
             console.print("[red]Error: -u/--url is required unless --request is used.[/red]")
@@ -386,16 +425,15 @@ def validate_arguments(args: dict, mode: str):
         if args['method'].upper() == 'GET' and args['body']:
             console.print("[red]Error: -b/--body is not allowed for GET requests.[/red]")
             sys.exit(1)
-        if args['method'].upper() == 'GET' and 'FCK' not in args['url']:
-            console.print("[red]Error: URL must contain 'FCK' placeholder for GET requests.[/red]")
-            sys.exit(1)
-        if args['method'].upper() == 'POST' and args['body'] and 'FCK' not in args['body']:
-            console.print("[red]Error: Body must contain 'FCK' placeholder for POST requests.[/red]")
-            sys.exit(1)
+        # For traditional: require FCK if no param
+        if not has_param:
+            if args['method'].upper() == 'GET' and 'FCK' not in args['url']:
+                console.print("[red]Error: URL must contain 'FCK' placeholder for GET requests without --param.[/red]")
+                sys.exit(1)
+            if args['method'].upper() == 'POST' and args['body'] and 'FCK' not in args['body']:
+                console.print("[red]Error: Body must contain 'FCK' placeholder for POST requests without --param.[/red]")
+                sys.exit(1)
     else:
-        if not args['param']:
-            console.print("[red]Error: -p/--param is required with --request.[/red]")
-            sys.exit(1)
         if args['url'] or args['body']:
             console.print("[yellow]Warning: Using --request, ignoring -u and -b.[/yellow]")
             args['url'] = None
@@ -403,6 +441,7 @@ def validate_arguments(args: dict, mode: str):
         if not args['wordlist'] and not args['fetch_response']:
             console.print("[red]Error: -w/--wordlist is required unless -r/--fetch-response is used.[/red]")
             sys.exit(1)
+        # For raw: if no param, require FCK (checked in main after parsing)
 
 def parse_arguments() -> Tuple[str, dict]:
     """Parse command-line arguments manually."""
@@ -452,8 +491,8 @@ def parse_arguments() -> Tuple[str, dict]:
                 args['wordlist'] = sys.argv[i]
         elif arg in ('-m', '--method'):
             i += 1
-            if i < len(sys.argv) and sys.argv[i] in ('GET', 'POST'):
-                args['method'] = sys.argv[i]
+            if i < len(sys.argv) and sys.argv[i].upper() in ('GET', 'POST'):
+                args['method'] = sys.argv[i].upper()
         elif arg in ('-t', '--timeout'):
             i += 1
             if i < len(sys.argv):
@@ -504,12 +543,13 @@ def parse_arguments() -> Tuple[str, dict]:
 
 def process_brute_word(word: str, args: dict, output_filters: List[dict], req: Optional[Dict] = None) -> Tuple[str, Optional[dict]]:
     """Process a single word in brute mode: make request, apply filters, and return result."""
+    method = args['method']
     if req:
         url, post_data, req_headers = prepare_fuzzed_request(req, word, args['param'], False, args['headers'])
-        response = make_request(url, args['method'], post_data, args['timeout'], args['debug'], req_headers)
+        response = make_request(url, method, post_data, args['timeout'], args['debug'], req_headers)
     else:
-        url, data = prepare_request(args['url'], args['body'], word, args['method'])
-        response = make_request(url, args['method'], data, args['timeout'], args['debug'], args['headers'])
+        url, data = prepare_request(args['url'], args['body'], word, method, args['param'])
+        response = make_request(url, method, data, args['timeout'], args['debug'], args['headers'])
    
     should_display = not output_filters
     for f in output_filters:
@@ -525,12 +565,13 @@ def process_brute_word(word: str, args: dict, output_filters: List[dict], req: O
 
 def process_xss_word(word: str, args: dict, req: Optional[Dict] = None) -> Tuple[str, Optional[dict]]:
     """Process a single word in XSS mode: check for exact payload reflection."""
+    method = args['method']
     if req:
         url, post_data, req_headers = prepare_fuzzed_request(req, word, args['param'], args['encode'], args['headers'])
-        response = make_request(url, args['method'], post_data, args['timeout'], args['debug'], req_headers)
+        response = make_request(url, method, post_data, args['timeout'], args['debug'], req_headers)
     else:
-        url, data = prepare_request(args['url'], args['body'], word, args['method'], args['encode'])
-        response = make_request(url, args['method'], data, args['timeout'], args['debug'], args['headers'])
+        url, data = prepare_request(args['url'], args['body'], word, method, args['param'], args['encode'])
+        response = make_request(url, method, data, args['timeout'], args['debug'], args['headers'])
    
     if check_xss_reflection(response['c'], word, args['encode']):
         return word, response
@@ -551,6 +592,15 @@ def main():
         try:
             req = parse_request_file(args['request_file'])
             args['method'] = req['method']
+            # Validate FCK if no param
+            if not args['param']:
+                method_upper = args['method'].upper()
+                if method_upper == 'GET' and 'FCK' not in req['url']:
+                    console.print("[red]Error: URL must contain 'FCK' placeholder for GET requests without --param.[/red]")
+                    sys.exit(1)
+                if method_upper != 'GET' and 'FCK' not in req['body']:
+                    console.print("[red]Error: Body must contain 'FCK' placeholder for non-GET requests without --param.[/red]")
+                    sys.exit(1)
         except ValueError as e:
             console.print(f"[red]{e}[/red]")
             sys.exit(1)
@@ -561,17 +611,20 @@ def main():
    
     console.print(f"[bold]Starting {mode} mode{' with ' + str(len(words)) + ' payloads' if words else ''}...[/bold]")
     console.print(f"[bold]Method:[/bold] {args['method']}")
+    if args['param']:
+        console.print(f"[bold]Fuzz Param:[/bold] {args['param']}")
+    else:
+        console.print(f"[bold]Fuzz Placeholder:[/bold] FCK")
     if args['request_file']:
         console.print(f"[bold]Request File:[/bold] {args['request_file']}")
-        console.print(f"[bold]Fuzz Param:[/bold] {args['param']}")
         console.print(f"[bold]Target URL:[/bold] {req['url']}")
         if req['body']:
             truncated_body = req['body'][:200] + '...' if len(req['body']) > 200 else req['body']
             console.print(f"[bold]Body:[/bold] {truncated_body}")
     else:
-        console.print(f"[bold]Target:[/bold] {args['url'].replace('FCK', '<word>')}")
+        console.print(f"[bold]Target:[/bold] {args['url']}{' (fuzzing ' + args['param'] + ')' if args['param'] else args['url'].replace('FCK', '<word>')}")
         if args['body']:
-            console.print(f"[bold]Body:[/bold] {args['body'].replace('FCK', '<word>')}")
+            console.print(f"[bold]Body:[/bold] {args['body'].replace('FCK', '<word>') if not args['param'] else args['body'] + ' (fuzzing ' + args['param'] + ')'}")
     if args['headers'] or (req and req['headers']):
         header_info = args['headers'] if not req else str(req['headers'])[:100] + '...'
         console.print(f"[bold]Headers:[/bold] {header_info}")
@@ -598,7 +651,7 @@ def main():
             url, post_data, req_headers = prepare_fuzzed_request(req, args['fetch_response'], args['param'], args['encode'] if mode == 'xss' else False, args['headers'])
             response = make_request(url, args['method'], post_data, args['timeout'], args['debug'], req_headers)
         else:
-            url, data = prepare_request(args['url'], args['body'], args['fetch_response'], args['method'], args['encode'] if mode == 'xss' else False)
+            url, data = prepare_request(args['url'], args['body'], args['fetch_response'], args['method'], args['param'], args['encode'] if mode == 'xss' else False)
             response = make_request(url, args['method'], data, args['timeout'], args['debug'], args['headers'])
         console.print(f"[bold cyan]HTML Response for '{args['fetch_response']}':[/bold cyan]")
         console.print(response['c'])
@@ -638,6 +691,7 @@ def main():
             task = progress.add_task("Working...", total=len(words))
             with ThreadPoolExecutor(max_workers=args['threads']) as executor:
                 if mode == 'brute':
+                    output_filters = parse_filters(args['output_filter'])
                     future_to_word = {
                         executor.submit(process_brute_word, word, args, output_filters, req): word
                         for word in words
